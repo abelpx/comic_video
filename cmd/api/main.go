@@ -12,16 +12,16 @@ import (
 
 	"comic_video/internal/api/routes"
 	"comic_video/internal/config"
+	"comic_video/internal/repository/minio"
 	"comic_video/internal/repository/postgres"
 	"comic_video/internal/repository/redis"
-	"comic_video/internal/repository/minio"
 	"comic_video/internal/service/auth"
+	"comic_video/internal/service/material"
 	"comic_video/internal/service/project"
+	"comic_video/internal/service/render"
+	"comic_video/internal/service/template"
 	"comic_video/internal/service/user"
 	"comic_video/internal/service/video"
-	"comic_video/internal/service/template"
-	"comic_video/internal/service/render"
-	"comic_video/internal/service/material"
 
 	"github.com/gin-gonic/gin"
 )
@@ -66,19 +66,23 @@ func main() {
 
 	// 初始化仓库
 	userRepo := postgres.NewUserRepository(db)
-	var projectRepo postgres.ProjectRepository = postgres.NewProjectRepository(db)
+	var projectRepo = postgres.NewProjectRepository(db)
+	var projectShareRepo = postgres.NewProjectShareRepository(db)
 	videoRepo := postgres.NewVideoRepository(db)
 	templateRepo := postgres.NewTemplateRepository(db)
-	var materialRepo postgres.MaterialRepository = postgres.NewMaterialRepository(db)
+	var materialRepo = postgres.NewMaterialRepository(db)
 	renderRepo := postgres.NewRenderRepository(db)
 
 	// 初始化服务
 	authService := auth.NewService(userRepo, redisClient, &cfg.JWT)
 	userService := user.NewService(userRepo)
-	projectService := project.NewService(projectRepo)
+	projectService := project.NewService(projectRepo, projectShareRepo)
 	videoService := video.NewService(videoRepo, minioClient)
 	templateService := template.NewService(templateRepo)
 	materialService := material.NewService(materialRepo, minioClient)
+	// 初始化渲染队列
+	queue := render.NewMemoryRenderQueue(100)
+
 	renderService := render.NewService(
 		renderRepo,
 		projectRepo,
@@ -88,8 +92,6 @@ func main() {
 		queue, // 注入队列
 	)
 
-	// 初始化渲染队列
-	queue := render.NewMemoryRenderQueue(100)
 	queue.StartWorker(4, renderService)
 
 	// 设置路由
@@ -133,4 +135,4 @@ func main() {
 	}
 
 	log.Println("Server exited")
-} 
+}

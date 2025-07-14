@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # PostgreSQL 数据库
   postgres:
-    image: postgres:14-alpine
+    image: postgres:latest
     container_name: vidcraft_postgres
     environment:
       POSTGRES_DB: vidcraft_studio

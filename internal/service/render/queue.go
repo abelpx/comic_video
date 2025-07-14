@@ -1,12 +1,10 @@
 package render
 
 import (
-	"context"
-	"encoding/json"
-	"sync"
-	"time"
-
 	"comic_video/internal/domain/entity"
+	"context"
+	"github.com/google/uuid"
+	"sync"
 )
 
 // TaskQueue 通用任务队列接口
@@ -72,4 +70,4 @@ func (q *MemoryRenderQueue) StartWorker(workerNum int, service Service) {
 			}
 		}()
 	}
-} 
+}
