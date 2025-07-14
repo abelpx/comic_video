@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:14-alpine
+    container_name: vidcraft_postgres
+    environment:
+      POSTGRES_DB: vidcraft_studio
+      POSTGRES_USER: vidcraft_user
+      POSTGRES_PASSWORD: vidcraft_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vidcraft_network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: vidcraft_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vidcraft_network
+
+  # MinIO 对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: vidcraft_minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - vidcraft_network
+
+  # API 服务器
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: vidcraft_api
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vidcraft_studio
+      - DB_USER=vidcraft_user
+      - DB_PASSWORD=vidcraft_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - RABBITMQ_URL=amqp://vidcraft_user:vidcraft_password@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - rabbitmq
+    networks:
+      - vidcraft_network
+
+  # 后台任务处理器
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: vidcraft_worker
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=vidcraft_studio
+      - DB_USER=vidcraft_user
+      - DB_PASSWORD=vidcraft_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - RABBITMQ_URL=amqp://vidcraft_user:vidcraft_password@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - rabbitmq
+    networks:
+      - vidcraft_network
+
+  # 前端应用
+  web:
+    build:
+      context: ./web
+      dockerfile: ../docker/Dockerfile.web
+    container_name: vidcraft_web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - vidcraft_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  rabbitmq_data:
+
+networks:
+  vidcraft_network:
+    driver: bridge 
