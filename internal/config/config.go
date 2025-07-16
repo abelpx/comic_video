@@ -15,6 +15,7 @@ type Config struct {
 	Redis    RedisConfig    `mapstructure:"redis"`
 	MinIO    MinIOConfig    `mapstructure:"minio"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
+	AI       AIConfig       `mapstructure:"ai"`
 }
 
 // ServerConfig 服务器配置
@@ -56,6 +57,16 @@ type JWTConfig struct {
 	Expire    int    `mapstructure:"expire"`
 }
 
+// AIConfig AI配置
+type AIConfig struct {
+	SDEndpoint      string
+	OllamaEndpoint  string
+	OllamaModel     string
+	OllamaApiKey    string // 新增
+	WhisperEndpoint string
+	TTSEndpoint     string
+}
+
 // Load 加载配置
 func Load() *Config {
 	// 加载环境变量文件
@@ -95,6 +106,14 @@ func Load() *Config {
 			SecretKey: getEnv("JWT_SECRET_KEY", "your-secret-key"),
 			Expire:    getEnvAsInt("JWT_EXPIRE", 24*60*60), // 24小时
 		},
+		AI: AIConfig{
+			SDEndpoint:      getEnv("SD_ENDPOINT", "http://127.0.0.1:7860"),
+			OllamaEndpoint:  getEnv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434"),
+			OllamaModel:     getEnv("OLLAMA_MODEL", "llama2"),
+			OllamaApiKey:    getEnv("OLLAMA_API_KEY", ""),
+			WhisperEndpoint: getEnv("WHISPER_ENDPOINT", "http://127.0.0.1:9000"),
+			TTSEndpoint:     getEnv("TTS_ENDPOINT", "http://127.0.0.1:50021"),
+		},
 	}
 
 	return config
@@ -114,6 +133,12 @@ func setDefaults() {
 	viper.SetDefault("minio.use_ssl", false)
 	viper.SetDefault("minio.bucket_name", "comic-video")
 	viper.SetDefault("jwt.expire", 24*60*60)
+	viper.SetDefault("ai.sd_endpoint", "http://127.0.0.1:7860")
+	viper.SetDefault("ai.ollama_endpoint", "http://127.0.0.1:11434")
+	viper.SetDefault("ai.ollama_model", "llama2")
+	viper.SetDefault("ai.ollama_api_key", "")
+	viper.SetDefault("ai.whisper_endpoint", "http://127.0.0.1:9000")
+	viper.SetDefault("ai.tts_endpoint", "http://127.0.0.1:50021")
 }
 
 // getEnv 获取环境变量，如果不存在则返回默认值

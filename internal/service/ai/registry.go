@@ -1,36 +1,31 @@
 package ai
 
-var (
-	imageGenProviders = map[string]ImageGen{}
-	textGenProviders  = map[string]TextGen{}
-	audio2TextProviders = map[string]Audio2Text{}
-	ttsProviders = map[string]TTS{}
-)
+var imageGenRegistry = make(map[string]ImageGen)
+var textGenRegistry = make(map[string]TextGen)
+var audio2TextRegistry = make(map[string]Audio2Text)
+var ttsRegistry = make(map[string]TTS)
 
-func RegisterImageGen(name string, provider ImageGen) {
-	imageGenProviders[name] = provider
+func RegisterImageGen(name string, gen ImageGen) {
+	imageGenRegistry[name] = gen
 }
 func GetImageGen(name string) ImageGen {
-	return imageGenProviders[name]
+	return imageGenRegistry[name]
 }
-
-func RegisterTextGen(name string, provider TextGen) {
-	textGenProviders[name] = provider
+func RegisterTextGen(name string, gen TextGen) {
+	textGenRegistry[name] = gen
 }
 func GetTextGen(name string) TextGen {
-	return textGenProviders[name]
+	return textGenRegistry[name]
 }
-
-func RegisterAudio2Text(name string, provider Audio2Text) {
-	audio2TextProviders[name] = provider
+func RegisterAudio2Text(name string, gen Audio2Text) {
+	audio2TextRegistry[name] = gen
 }
 func GetAudio2Text(name string) Audio2Text {
-	return audio2TextProviders[name]
+	return audio2TextRegistry[name]
 }
-
-func RegisterTTS(name string, provider TTS) {
-	ttsProviders[name] = provider
+func RegisterTTS(name string, gen TTS) {
+	ttsRegistry[name] = gen
 }
 func GetTTS(name string) TTS {
-	return ttsProviders[name]
+	return ttsRegistry[name]
 } 

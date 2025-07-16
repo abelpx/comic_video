@@ -11,6 +11,7 @@ import (
 	"comic_video/internal/service/render"
 	"comic_video/internal/service/material"
 	"comic_video/internal/repository/redis"
+	"comic_video/internal/service/ai"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,6 +26,7 @@ func SetupRoutes(
 	projectService *project.Service,
 	materialService *material.Service,
 	redisClient *redis.Client, // 新增参数
+	taskQueue ai.TaskQueue, // 新增参数
 ) *gin.Engine {
 	router := gin.Default()
 
@@ -71,8 +73,8 @@ func SetupRoutes(
 	}
 
 	// 项目分享相关路由
-	v1.POST("/share/:token/check", projectHandler.CheckShare) // 校验分享（无需登录）
-	v1.POST("/share/:share_id/cancel", middleware.AuthMiddleware(authService), projectHandler.CancelShare) // 取消分享（需登录）
+	v1.POST("/share/check/:token", projectHandler.CheckShare) // 校验分享（无需登录）
+	v1.POST("/share/cancel/:share_id", middleware.AuthMiddleware(authService), projectHandler.CancelShare) // 取消分享（需登录）
 
 	// 视频相关路由
 	videoHandler := handlers.NewVideoHandler(videoService)
@@ -127,6 +129,12 @@ func SetupRoutes(
 	// 通用任务进度查询API
 	taskHandler := handlers.NewTaskHandler(redisClient)
 	v1.GET("/task/:id/status", taskHandler.GetTaskStatus)
+
+	// AI 相关路由
+	aiHandler := handlers.NewAIHandler(redisClient, taskQueue)
+	v1.POST("/ai/novel-to-video", aiHandler.NovelToVideo)
+	v1.POST("/ai/generate-novel", aiHandler.GenerateNovel)
+	v1.POST("/ai/novel-to-all", aiHandler.NovelToAll)
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {

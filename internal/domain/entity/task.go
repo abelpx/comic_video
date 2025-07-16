@@ -27,13 +27,13 @@ const (
 // 参数和结果建议用 JSON 字符串存储，便于灵活扩展
 
 type Task struct {
-	ID        uuid.UUID `json:"id"`
-	Type      string    `json:"type"`      // 任务类型
-	Status    string    `json:"status"`    // 任务状态
-	Progress  int       `json:"progress"`  // 进度百分比
-	Params    string    `json:"params"`    // 任务参数（JSON字符串）
-	Result    string    `json:"result"`    // 任务结果（JSON字符串）
-	Error     string    `json:"error"`     // 错误信息
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey"`
+	Type      string    `json:"type" gorm:"type:varchar(32);index"`      // 任务类型
+	Status    string    `json:"status" gorm:"type:varchar(32);index"`    // 任务状态
+	Progress  int       `json:"progress"`
+	Params    string    `json:"params" gorm:"type:text"`    // 任务参数（JSON字符串）
+	Result    string    `json:"result" gorm:"type:text"`    // 任务结果（JSON字符串）
+	Error     string    `json:"error" gorm:"type:text"`     // 错误信息
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 } 

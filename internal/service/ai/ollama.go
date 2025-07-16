@@ -10,6 +10,7 @@ import (
 type OllamaClient struct {
 	Endpoint string // 例如 http://127.0.0.1:11434
 	Model    string // 如 "llama2"、"qwen" 等
+	ApiKey   string // 新增，支持 API Key
 }
 
 type ollamaChatReq struct {
@@ -29,7 +30,11 @@ type ollamaResp struct {
 func (o *OllamaClient) Chat(messages []Message, opts map[string]interface{}) (string, error) {
 	reqBody := ollamaChatReq{Model: o.Model, Messages: messages}
 	b, _ := json.Marshal(reqBody)
-	resp, err := http.Post(o.Endpoint+"/api/chat", "application/json", bytes.NewReader(b))
+	req, _ := http.NewRequest("POST", o.Endpoint+"/api/chat", bytes.NewReader(b))
+	if o.ApiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+o.ApiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -47,7 +52,11 @@ func (o *OllamaClient) Chat(messages []Message, opts map[string]interface{}) (st
 func (o *OllamaClient) Generate(prompt string, opts map[string]interface{}) (string, error) {
 	reqBody := ollamaGenReq{Model: o.Model, Prompt: prompt}
 	b, _ := json.Marshal(reqBody)
-	resp, err := http.Post(o.Endpoint+"/api/generate", "application/json", bytes.NewReader(b))
+	req, _ := http.NewRequest("POST", o.Endpoint+"/api/generate", bytes.NewReader(b))
+	if o.ApiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+o.ApiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}

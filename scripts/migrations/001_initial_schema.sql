@@ -150,6 +150,21 @@ CREATE TABLE IF NOT EXISTS project_shares (
     deleted_at TIMESTAMP
 );
 
+-- Task 通用任务表
+CREATE TABLE IF NOT EXISTS tasks (
+    id UUID PRIMARY KEY,
+    type VARCHAR(32),
+    status VARCHAR(32),
+    progress INT,
+    params TEXT,
+    result TEXT,
+    error TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+
 -- 创建索引
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_username ON users(username);

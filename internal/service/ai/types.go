@@ -21,3 +21,21 @@ type Message struct {
 // 3. 视频转动漫：Audio2Text 识别字幕，TextGen 生成分镜描述，ImageGen 生成动漫画面，TTS 合成配音
 // 4. 其它AI能力可按需扩展
 // 
+
+type ImageGen interface {
+	Txt2Img(prompt string, opts map[string]interface{}) (ImageResult, error)
+	Img2Img(image []byte, prompt string, opts map[string]interface{}) (ImageResult, error)
+}
+
+type TextGen interface {
+	Chat(messages []Message, opts map[string]interface{}) (string, error)
+	Generate(prompt string, opts map[string]interface{}) (string, error)
+}
+
+type Audio2Text interface {
+	Transcribe(audio []byte, opts map[string]interface{}) (string, error)
+}
+
+type TTS interface {
+	Synthesize(text string, opts map[string]interface{}) ([]byte, error)
+} 

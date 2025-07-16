@@ -46,6 +46,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&entity.Template{},
 		&entity.Material{},
 		&entity.Render{},
+		&entity.Task{}, // 新增
 	}
 
 	return db.AutoMigrate(entities...)
