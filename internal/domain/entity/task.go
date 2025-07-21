@@ -31,9 +31,10 @@ type Task struct {
 	Type      string    `json:"type" gorm:"type:varchar(32);index"`      // 任务类型
 	Status    string    `json:"status" gorm:"type:varchar(32);index"`    // 任务状态
 	Progress  int       `json:"progress"`
+	UserID    string    `json:"user_id" gorm:"type:varchar(64);index"`   // 用户ID
 	Params    string    `json:"params" gorm:"type:text"`    // 任务参数（JSON字符串）
 	Result    string    `json:"result" gorm:"type:text"`    // 任务结果（JSON字符串）
 	Error     string    `json:"error" gorm:"type:text"`     // 错误信息
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-} 
+}

@@ -15,7 +15,14 @@
     "antd": "^5.13.0",
     "axios": "^1.6.7",
     "react-router-dom": "^6.22.3",
-    "@ant-design/icons": "^5.2.5"
+    "@ant-design/icons": "^5.2.5",
+    "zustand": "^4.4.7",
+    "framer-motion": "^10.16.16",
+    "recharts": "^2.8.0",
+    "react-helmet-async": "^2.0.4",
+    "dayjs": "^1.11.10",
+    "classnames": "^2.3.2",
+    "react-hot-toast": "^2.4.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.14",

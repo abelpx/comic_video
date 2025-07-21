@@ -127,14 +127,20 @@ func SetupRoutes(
 	}
 
 	// 通用任务进度查询API
-	taskHandler := handlers.NewTaskHandler(redisClient)
+	taskHandler := handlers.NewTaskHandler(redisClient, nil) // 暂时传nil，后续可以添加真实的taskRepo
 	v1.GET("/task/:id/status", taskHandler.GetTaskStatus)
+	v1.GET("/tasks", taskHandler.GetUserTasks) // 获取用户任务列表
 
 	// AI 相关路由
 	aiHandler := handlers.NewAIHandler(redisClient, taskQueue)
-	v1.POST("/ai/novel-to-video", aiHandler.NovelToVideo)
-	v1.POST("/ai/generate-novel", aiHandler.GenerateNovel)
-	v1.POST("/ai/novel-to-all", aiHandler.NovelToAll)
+	ai := v1.Group("/ai")
+	{
+		ai.POST("/novel-to-video", aiHandler.NovelToVideo)
+		ai.POST("/generate-novel", aiHandler.GenerateNovel)
+		ai.POST("/novel-to-all", aiHandler.NovelToAll)
+		ai.GET("/quota", aiHandler.GetUserQuota)        // 获取用户配额
+		ai.GET("/usage-stats", aiHandler.GetUsageStats) // 获取使用统计
+	}
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {

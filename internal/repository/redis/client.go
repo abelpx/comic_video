@@ -47,6 +47,8 @@ func (c *Client) Del(ctx context.Context, keys ...string) error {
 	return c.client.Del(ctx, keys...).Err()
 }
 
+
+
 // Exists 检查键是否存在
 func (c *Client) Exists(ctx context.Context, keys ...string) (bool, error) {
 	result, err := c.client.Exists(ctx, keys...).Result()
@@ -74,6 +76,11 @@ func (c *Client) Incr(ctx context.Context, key string) error {
 // IncrBy 按指定值递增
 func (c *Client) IncrBy(ctx context.Context, key string, value int64) error {
 	return c.client.IncrBy(ctx, key, value).Err()
+}
+
+// ExpireAt 设置过期时间
+func (c *Client) ExpireAt(ctx context.Context, key string, tm time.Time) error {
+	return c.client.ExpireAt(ctx, key, tm).Err()
 }
 
 // HSet 设置哈希字段

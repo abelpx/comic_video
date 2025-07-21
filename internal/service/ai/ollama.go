@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 )
 
 type OllamaClient struct {
@@ -25,6 +27,7 @@ type ollamaGenReq struct {
 
 type ollamaResp struct {
 	Response string `json:"response"`
+	Done     bool   `json:"done"`
 }
 
 func (o *OllamaClient) Chat(messages []Message, opts map[string]interface{}) (string, error) {
@@ -53,6 +56,7 @@ func (o *OllamaClient) Generate(prompt string, opts map[string]interface{}) (str
 	reqBody := ollamaGenReq{Model: o.Model, Prompt: prompt}
 	b, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", o.Endpoint+"/api/generate", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
 	if o.ApiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+o.ApiKey)
 	}
@@ -64,9 +68,31 @@ func (o *OllamaClient) Generate(prompt string, opts map[string]interface{}) (str
 	if resp.StatusCode != 200 {
 		return "", fmt.Errorf("Ollama API error: %s", resp.Status)
 	}
-	var result ollamaResp
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+
+	// Ollama可能返回流式响应，需要逐行解析
+	var fullResponse strings.Builder
+	decoder := json.NewDecoder(resp.Body)
+
+	for decoder.More() {
+		var result ollamaResp
+		if err := decoder.Decode(&result); err != nil {
+			// 如果解析失败，尝试读取剩余内容作为普通文本
+			remaining, _ := io.ReadAll(decoder.Buffered())
+			if len(remaining) > 0 {
+				fullResponse.WriteString(string(remaining))
+			}
+			break
+		}
+		fullResponse.WriteString(result.Response)
+		if result.Done {
+			break
+		}
 	}
-	return result.Response, nil
-} 
+
+	response := strings.TrimSpace(fullResponse.String())
+	if response == "" {
+		return "", fmt.Errorf("empty response from Ollama")
+	}
+
+	return response, nil
+}
