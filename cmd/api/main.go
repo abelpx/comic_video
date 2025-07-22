@@ -96,7 +96,7 @@ func main() {
 	queue.StartWorker(4, renderService)
 
 	// 初始化AI能力
-	sdClient := &ai.SDClient{Endpoint: cfg.AI.SDEndpoint}
+	sdClient := ai.NewSDClient(cfg.AI.SDEndpoint)
 	ollamaClient := &ai.OllamaClient{Endpoint: cfg.AI.OllamaEndpoint, Model: cfg.AI.OllamaModel, ApiKey: cfg.AI.OllamaApiKey}
 	ttsClient := &ai.TTSClient{Endpoint: cfg.AI.TTSEndpoint}
 	// 可根据需要初始化 WhisperClient 等

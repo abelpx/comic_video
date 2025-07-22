@@ -60,13 +60,19 @@ func (pt *PromptTranslator) TranslateToEnglish(chinesePrompt string) (string, er
 
 // translateWithOllama 使用Ollama进行翻译
 func (pt *PromptTranslator) translateWithOllama(chinesePrompt string) (string, error) {
-	prompt := fmt.Sprintf(`请将以下中文描述翻译为简洁的英文。
+	prompt := fmt.Sprintf(`请将以下中文描述翻译为适合AI绘画的英文提示词。
 
 要求：
-1. 准确翻译原意，保持简洁
-2. 不要添加额外的修饰词
-3. 不要添加质量关键词
-4. 只输出翻译结果，不要解释
+1. 翻译为简洁的视觉描述
+2. 避免暴力、武器等敏感词汇，用温和词汇替代
+3. 专注于人物、场景、氛围的视觉元素
+4. 使用第三人称描述
+5. 只输出翻译结果，不要解释
+
+示例转换：
+- "持枪" → "holding objects"
+- "包围" → "gathering around"
+- "瞄准" → "looking towards"
 
 中文描述：
 %s

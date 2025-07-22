@@ -323,15 +323,8 @@ Please output panel JSON array:`, req.Novel)
 		var img ImageResult
 		var err error
 
-		// 先翻译基础分镜描述
-		translatedPanel, transErr := TranslatePrompt(panel)
-		if transErr != nil {
-			log.Printf("[AI] 提示词翻译失败，使用原始prompt: %v", transErr)
-			translatedPanel = panel
-		}
-
-		// 构建增强的英文prompt
-		finalPrompt := buildEnhancedEnglishPrompt(translatedPanel, characters, sceneContext)
+		// 根据配置决定是否翻译提示词
+		finalPrompt := processPromptForSD(panel, characters, sceneContext)
 
 		log.Printf("[AI] 最终prompt: %s", finalPrompt[:min(100, len(finalPrompt))])
 
@@ -346,8 +339,8 @@ Please output panel JSON array:`, req.Novel)
 
 			// 如果是422错误，尝试使用最简化的提示词
 			if strings.Contains(err.Error(), "422") && retry == 1 {
-				// 使用已经翻译好的基础提示词
-				simplePrompt := translatedPanel + ", high quality, detailed, professional illustration"
+				// 使用简化的基础提示词
+				simplePrompt := panel + ", high quality, detailed, professional illustration"
 				log.Printf("[AI] 尝试简化prompt: %s", simplePrompt)
 				img, err = sd.Txt2Img(simplePrompt, map[string]interface{}{
 					"width":        512,
@@ -803,19 +796,78 @@ func buildEnhancedEnglishPrompt(translatedPanel string, characters []CharacterPr
 		log.Printf("[AI] 警告：提示词可能不是英文: %s", translatedPanel[:min(50, len(translatedPanel))])
 	}
 
-	// 添加简洁的质量关键词
-	qualityKeywords := []string{
-		"high quality",
+	// 优化提示词，移除敏感内容
+	optimizedPrompt := optimizePromptForSD(translatedPanel)
+
+	// 为本地SD添加更有效的关键词
+	// 本地SD更关注艺术质量而非内容安全
+	styleKeywords := []string{
+		"anime style",
+		"illustration",
 		"detailed",
+		"high quality",
+		"masterpiece",
+		"best quality",
 	}
 
 	// 构建最终提示词
-	finalPrompt := translatedPanel
-
-	// 添加质量关键词
-	finalPrompt += ", " + strings.Join(qualityKeywords, ", ")
+	finalPrompt := optimizedPrompt + ", " + strings.Join(styleKeywords, ", ")
 
 	return finalPrompt
+}
+
+// optimizePromptForSD 优化提示词使其适合SD生成
+func optimizePromptForSD(prompt string) string {
+	// 对于本地SD，主要问题不是敏感词汇，而是提示词质量
+	// 重点优化：简化复杂叙事，提高可理解性
+
+	optimized := prompt
+
+	// 1. 移除第一人称和复杂叙事
+	optimized = strings.ReplaceAll(optimized, " us.", ".")
+	optimized = strings.ReplaceAll(optimized, " us,", ",")
+	optimized = strings.ReplaceAll(optimized, " us ", " them ")
+	optimized = strings.ReplaceAll(optimized, " we ", " they ")
+	optimized = strings.ReplaceAll(optimized, " our ", " their ")
+
+	// 2. 简化复杂的动作序列
+	// 将复杂的连续动作简化为主要动作
+	actionWords := []string{"turned", "entered", "walked", "ran", "jumped", "looked", "smiled", "sat"}
+	actionCount := 0
+	for _, action := range actionWords {
+		if strings.Contains(strings.ToLower(optimized), action) {
+			actionCount++
+		}
+	}
+
+	// 如果动作过多，简化句子
+	if actionCount > 2 && strings.Contains(optimized, ",") {
+		parts := strings.Split(optimized, ",")
+		// 保留前两个最重要的部分
+		if len(parts) > 2 {
+			optimized = strings.Join(parts[:2], ",")
+		}
+	}
+
+	// 3. 优化句子结构，使其更适合SD理解
+	// 移除过于复杂的从句
+	optimized = strings.ReplaceAll(optimized, " and then ", ", ")
+	optimized = strings.ReplaceAll(optimized, " while ", ", ")
+	optimized = strings.ReplaceAll(optimized, " when ", ", ")
+
+	// 4. 确保有明确的主体
+	if !strings.Contains(strings.ToLower(optimized), "person") &&
+	   !strings.Contains(strings.ToLower(optimized), "people") &&
+	   !strings.Contains(strings.ToLower(optimized), "character") &&
+	   !strings.Contains(strings.ToLower(optimized), "woman") &&
+	   !strings.Contains(strings.ToLower(optimized), "man") {
+		// 如果没有明确的人物主体，添加一个
+		if strings.Contains(optimized, "Zhang Fengfeng") {
+			optimized = "character " + optimized
+		}
+	}
+
+	return strings.TrimSpace(optimized)
 }
 
 // isEnglishPrompt 检测是否为英文提示词
@@ -837,6 +889,61 @@ func isEnglishPrompt(prompt string) bool {
 	}
 
 	return float64(englishCount)/float64(total) > 0.5
+}
+
+// processPromptForSD 根据配置处理SD提示词
+func processPromptForSD(panel string, characters []CharacterProfile, context SceneContext) string {
+	// 检查是否启用翻译
+	enableTranslation := strings.ToLower(os.Getenv("ENABLE_PROMPT_TRANSLATION")) == "true"
+	useChinesePrompts := strings.ToLower(os.Getenv("SD_USE_CHINESE_PROMPTS")) == "true"
+
+	// 如果配置为使用中文提示词，直接使用中文
+	if useChinesePrompts {
+		log.Printf("[AI] 配置为使用中文提示词")
+		// 为中文提示词添加质量关键词
+		chineseKeywords := []string{
+			"高质量",
+			"详细",
+			"杰作",
+			"最佳质量",
+			"动漫风格",
+		}
+		return panel + "，" + strings.Join(chineseKeywords, "，")
+	}
+
+	// 如果不启用翻译，但也不使用中文，则使用简单的英文关键词
+	if !enableTranslation {
+		log.Printf("[AI] 翻译已禁用，使用原始提示词")
+		// 如果原始提示词是中文，添加中文关键词
+		if containsChineseCharacters(panel) {
+			chineseKeywords := []string{"高质量", "详细", "动漫风格"}
+			return panel + "，" + strings.Join(chineseKeywords, "，")
+		}
+		// 如果是英文，添加英文关键词
+		englishKeywords := []string{"high quality", "detailed", "anime style"}
+		return panel + ", " + strings.Join(englishKeywords, ", ")
+	}
+
+	// 启用翻译的情况下，进行翻译
+	log.Printf("[AI] 翻译已启用，进行提示词翻译")
+	translatedPanel, transErr := TranslatePrompt(panel)
+	if transErr != nil {
+		log.Printf("[AI] 提示词翻译失败，使用原始prompt: %v", transErr)
+		translatedPanel = panel
+	}
+
+	// 构建增强的英文prompt
+	return buildEnhancedEnglishPrompt(translatedPanel, characters, context)
+}
+
+// containsChineseCharacters 检查是否包含中文字符
+func containsChineseCharacters(s string) bool {
+	for _, r := range s {
+		if r >= '\u4e00' && r <= '\u9fff' {
+			return true
+		}
+	}
+	return false
 }
 
 // generateVoiceNarration 生成适合语音的旁白
