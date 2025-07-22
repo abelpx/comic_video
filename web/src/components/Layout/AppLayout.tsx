@@ -19,6 +19,7 @@ import {
   MenuUnfoldOutlined,
   SunOutlined,
   MoonOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons';
 import { useAuth, useUser, useUI, useTasks } from '../../store';
 
@@ -42,6 +43,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       key: '/app/dashboard',
       icon: <DashboardOutlined />,
       label: <Link to="/app/dashboard">仪表板</Link>,
+    },
+    {
+      key: '/app/workflow',
+      icon: <NodeIndexOutlined />,
+      label: <Link to="/app/workflow">AI工作流</Link>,
     },
     {
       key: 'ai-tools',

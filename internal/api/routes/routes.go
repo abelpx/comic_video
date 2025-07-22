@@ -12,6 +12,7 @@ import (
 	"comic_video/internal/service/material"
 	"comic_video/internal/repository/redis"
 	"comic_video/internal/service/ai"
+	"comic_video/internal/service/workflow"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,8 +26,9 @@ func SetupRoutes(
 	renderService render.Service,
 	projectService *project.Service,
 	materialService *material.Service,
-	redisClient *redis.Client, // 新增参数
-	taskQueue ai.TaskQueue, // 新增参数
+	redisClient *redis.Client,
+	taskQueue ai.TaskQueue,
+	workflowEngine *workflow.WorkflowEngine, // 新增工作流引擎参数
 ) *gin.Engine {
 	router := gin.Default()
 
@@ -140,6 +142,21 @@ func SetupRoutes(
 		ai.POST("/novel-to-all", aiHandler.NovelToAll)
 		ai.GET("/quota", aiHandler.GetUserQuota)        // 获取用户配额
 		ai.GET("/usage-stats", aiHandler.GetUsageStats) // 获取使用统计
+	}
+
+	// 工作流相关路由
+	workflowHandler := handlers.NewWorkflowHandler(workflowEngine)
+	workflows := v1.Group("/workflows")
+	workflows.Use(middleware.AuthMiddleware(authService)) // 需要认证
+	{
+		workflows.POST("/", workflowHandler.CreateWorkflow)
+		workflows.POST("/:id/start", workflowHandler.StartWorkflow)
+		workflows.GET("/:id", workflowHandler.GetWorkflow)
+		workflows.GET("/", workflowHandler.ListWorkflows)
+		workflows.GET("/:id/tasks", workflowHandler.GetWorkflowTasks)
+		workflows.GET("/:id/progress", workflowHandler.GetWorkflowProgress)
+		workflows.POST("/:id/cancel", workflowHandler.CancelWorkflow)
+		workflows.POST("/novel-to-video", workflowHandler.NovelToVideoWorkflow) // 完整工作流
 	}
 
 	// 健康检查

@@ -18,15 +18,120 @@ import (
 
 	"comic_video/internal/domain/entity"
 	"comic_video/internal/repository/minio"
-	"comic_video/internal/repository/redis"
+	
 )
+
+// Service AI服务
+type Service struct {
+	sdClient      *SDClient
+	ollamaClient  *OllamaClient
+	ttsClient     *TTSClient
+	whisperClient *WhisperClient
+	minioClient   minio.MinioClient
+	redisClient   *redis.Client
+}
+
+// NewService 创建AI服务
+func NewService(
+	sdClient *SDClient,
+	ollamaClient *OllamaClient,
+	ttsClient *TTSClient,
+	whisperClient *WhisperClient,
+	minioClient minio.MinioClient,
+	redisClient *redis.Client,
+) *Service {
+	return &Service{
+		sdClient:      sdClient,
+		ollamaClient:  ollamaClient,
+		ttsClient:     ttsClient,
+		whisperClient: whisperClient,
+		minioClient:   minioClient,
+		redisClient:   redisClient,
+	}
+}
+
+// GenerateText 生成文本
+func (s *Service) GenerateText(ctx context.Context, prompt string) (string, error) {
+	return s.ollamaClient.Generate(prompt, nil)
+}
+
+// GenerateImage 生成图像
+func (s *Service) GenerateImage(ctx context.Context, prompt string, seed int64) (string, error) {
+	// 调用SD API生成图像
+	imageData, err := s.sdClient.GenerateImage(prompt, seed)
+	if err != nil {
+		return "", fmt.Errorf("生成图像失败: %w", err)
+	}
+
+	// 上传到MinIO
+	filename := fmt.Sprintf("generated_%d_%d.png", time.Now().Unix(), seed)
+	imageURL, err := s.minioClient.UploadFromBytes(ctx, filename, imageData, "image/png")
+	if err != nil {
+		return "", fmt.Errorf("上传图像失败: %w", err)
+	}
+
+	return imageURL, nil
+}
+
+// VoiceGenerationRequest 语音生成请求
+type VoiceGenerationRequest struct {
+	Text       string  `json:"text"`
+	VoiceModel string  `json:"voice_model"`
+	Language   string  `json:"language"`
+	Speed      float64 `json:"speed"`
+	Pitch      float64 `json:"pitch"`
+	Volume     float64 `json:"volume"`
+	Emotion    string  `json:"emotion"`
+}
+
+// GenerateVoice 生成语音
+func (s *Service) GenerateVoice(ctx context.Context, req *VoiceGenerationRequest) (string, float64, error) {
+	// 调用TTS API生成语音
+	audioData, duration, err := s.ttsClient.GenerateVoice(req.Text, req.VoiceModel, req.Language, req.Speed, req.Pitch, req.Volume, req.Emotion)
+	if err != nil {
+		return "", 0, fmt.Errorf("生成语音失败: %w", err)
+	}
+
+	// 上传到MinIO
+	filename := fmt.Sprintf("voice_%d.wav", time.Now().Unix())
+	audioURL, err := s.minioClient.UploadFromBytes(ctx, filename, audioData, "audio/wav")
+	if err != nil {
+		return "", 0, fmt.Errorf("上传语音失败: %w", err)
+	}
+
+	return audioURL, duration, nil
+}
+
+// MusicGenerationRequest 音乐生成请求
+type MusicGenerationRequest struct {
+	Prompt   string `json:"prompt"`
+	Style    string `json:"style"`
+	Mood     string `json:"mood"`
+	Tempo    string `json:"tempo"`
+	Duration int    `json:"duration"`
+}
+
+// GenerateMusic 生成音乐
+func (s *Service) GenerateMusic(ctx context.Context, req *MusicGenerationRequest) (string, float64, error) {
+	// 这里应该调用音乐生成API，目前使用模拟实现
+	// 实际实现中可能需要集成MusicGen、Jukebox等模型
+
+	// 模拟音乐生成
+	log.Printf("[AI] 模拟生成音乐: prompt=%s, style=%s, duration=%d", req.Prompt, req.Style, req.Duration)
+
+	// 返回模拟的音乐URL和时长
+	musicURL := fmt.Sprintf("https://example.com/music_%d.wav", time.Now().Unix())
+	duration := float64(req.Duration)
+
+	return musicURL, duration, nil
+}
 
 // CharacterProfile 角色档案，用于保持角色一致性
 type CharacterProfile struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Seed        int64  `json:"seed"`        // 固定种子确保一致性
-	Appearance  string `json:"appearance"`  // 外观描述
+	Seed        int64  `json:"seed"`       // 固定种子确保一致性
+	Appearance  string `json:"appearance"` // 外观描述
 }
 
 // SceneContext 场景上下文，用于保持场景连贯性
@@ -857,10 +962,10 @@ func optimizePromptForSD(prompt string) string {
 
 	// 4. 确保有明确的主体
 	if !strings.Contains(strings.ToLower(optimized), "person") &&
-	   !strings.Contains(strings.ToLower(optimized), "people") &&
-	   !strings.Contains(strings.ToLower(optimized), "character") &&
-	   !strings.Contains(strings.ToLower(optimized), "woman") &&
-	   !strings.Contains(strings.ToLower(optimized), "man") {
+		!strings.Contains(strings.ToLower(optimized), "people") &&
+		!strings.Contains(strings.ToLower(optimized), "character") &&
+		!strings.Contains(strings.ToLower(optimized), "woman") &&
+		!strings.Contains(strings.ToLower(optimized), "man") {
 		// 如果没有明确的人物主体，添加一个
 		if strings.Contains(optimized, "Zhang Fengfeng") {
 			optimized = "character " + optimized
@@ -1022,8 +1127,6 @@ func min(a, b int) int {
 	return b
 }
 
-
-
 // max 返回两个整数中的较大值
 func max(a, b int) int {
 	if a > b {
@@ -1072,13 +1175,13 @@ func isValidPanelContent(panels []string) bool {
 
 			// 检查是否是高质量分镜（包含详细描述）
 			if len(panel) >= 50 &&
-			   (strings.Contains(panelLower, "表情") ||
-			    strings.Contains(panelLower, "眼神") ||
-			    strings.Contains(panelLower, "背景") ||
-			    strings.Contains(panelLower, "光") ||
-			    strings.Contains(panelLower, "阴影") ||
-			    strings.Contains(panelLower, "特写") ||
-			    strings.Contains(panelLower, "全景")) {
+				(strings.Contains(panelLower, "表情") ||
+					strings.Contains(panelLower, "眼神") ||
+					strings.Contains(panelLower, "背景") ||
+					strings.Contains(panelLower, "光") ||
+					strings.Contains(panelLower, "阴影") ||
+					strings.Contains(panelLower, "特写") ||
+					strings.Contains(panelLower, "全景")) {
 				highQualityCount++
 			}
 		}

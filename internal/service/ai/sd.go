@@ -16,15 +16,13 @@ import (
 	"time"
 )
 
-
-
 type SDClient struct {
-	Endpoint              string // 例如 http://127.0.0.1:7860
-	Timeout               time.Duration
-	MaxRetries           int
-	RetryDelay           time.Duration
-	EnableTranslation    bool
-	UseChinesePrompts    bool
+	Endpoint          string // 例如 http://127.0.0.1:7860
+	Timeout           time.Duration
+	MaxRetries        int
+	RetryDelay        time.Duration
+	EnableTranslation bool
+	UseChinesePrompts bool
 }
 
 // NewSDClient 创建新的SD客户端
@@ -55,12 +53,12 @@ func NewSDClient(endpoint string) *SDClient {
 	useChinesePrompts := strings.ToLower(os.Getenv("SD_USE_CHINESE_PROMPTS")) == "true"
 
 	return &SDClient{
-		Endpoint:              endpoint,
-		Timeout:               timeout,
-		MaxRetries:           maxRetries,
-		RetryDelay:           retryDelay,
-		EnableTranslation:    enableTranslation,
-		UseChinesePrompts:    useChinesePrompts,
+		Endpoint:          endpoint,
+		Timeout:           timeout,
+		MaxRetries:        maxRetries,
+		RetryDelay:        retryDelay,
+		EnableTranslation: enableTranslation,
+		UseChinesePrompts: useChinesePrompts,
 	}
 }
 
@@ -193,8 +191,6 @@ func containsChinese(s string) bool {
 	return false
 }
 
-
-
 // Txt2ImgWithConsistency 带有角色和场景一致性的图片生成
 func (s *SDClient) Txt2ImgWithConsistency(ctx context.Context, prompt string, characters []CharacterProfile, sceneContext SceneContext) (ImageResult, error) {
 	// 计算一致性种子
@@ -290,4 +286,29 @@ func (s *SDClient) Img2Img(image []byte, prompt string, opts map[string]interfac
 // decodeBase64Image 解码base64图片
 func decodeBase64Image(b64 string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(b64)
-} 
+}
+
+// GenerateImage 生成图像（为新的AI服务提供的包装方法）
+func (s *SDClient) GenerateImage(prompt string, seed int64) ([]byte, error) {
+	opts := map[string]interface{}{
+		"width":  512,
+		"height": 512,
+		"steps":  20,
+	}
+
+	if seed > 0 {
+		opts["seed"] = seed
+	}
+
+	result, err := s.Txt2Img(prompt, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.Data) == 0 {
+		return nil, fmt.Errorf("no images generated")
+	}
+
+	// 直接返回图片数据
+	return result.Data, nil
+}

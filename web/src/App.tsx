@@ -30,6 +30,7 @@ import WorksPage from './pages/WorksPage';
 import QuotaPage from './pages/QuotaPage';
 import PricingPage from './pages/PricingPage';
 import ProfilePage from './pages/ProfilePage';
+import WorkflowPage from './pages/WorkflowPage';
 
 // 导入路由保护组件
 import ProtectedRoute from './components/ProtectedRoute';
@@ -70,6 +71,7 @@ export default function App() {
                         <Route path="generate-tweet" element={<GenerateTweet />} />
                         <Route path="generate-novel" element={<GenerateNovel />} />
                         <Route path="video-to-anime" element={<VideoToAnime />} />
+                        <Route path="workflow" element={<WorkflowPage />} />
                         <Route path="works" element={<WorksPage />} />
                         <Route path="quota" element={<QuotaPage />} />
                         <Route path="profile" element={<ProfilePage />} />

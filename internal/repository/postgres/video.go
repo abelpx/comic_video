@@ -98,4 +98,14 @@ func (r *VideoRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // UpdateStatus 更新视频状态
 func (r *VideoRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	return r.db.WithContext(ctx).Model(&entity.Video{}).Where("id = ?", id).Update("status", status).Error
-} 
+}
+
+// GetByProjectID 根据项目ID获取视频
+func (r *VideoRepository) GetByProjectID(ctx context.Context, projectID uuid.UUID) (*entity.Video, error) {
+	var video entity.Video
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).First(&video).Error
+	if err != nil {
+		return nil, err
+	}
+	return &video, nil
+}

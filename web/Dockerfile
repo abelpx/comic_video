@@ -1,3 +1,5 @@
+# VidCraft Studio 前端 Dockerfile
+
 # 构建阶段
 FROM node:18-alpine AS builder
 
@@ -7,8 +9,11 @@ WORKDIR /app
 # 复制package文件
 COPY package*.json ./
 
+# 清理可能存在的node_modules和package-lock
+RUN rm -rf node_modules package-lock.json
+
 # 安装依赖
-RUN npm ci --only=production
+RUN npm install
 
 # 复制源代码
 COPY . .
@@ -19,7 +24,7 @@ RUN npm run build
 # 运行阶段
 FROM nginx:alpine
 
-# 复制构建产物到nginx目录
+# 复制构建结果到nginx目录
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # 复制nginx配置
@@ -29,4 +34,4 @@ COPY nginx.conf /etc/nginx/nginx.conf
 EXPOSE 3000
 
 # 启动nginx
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]

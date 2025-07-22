@@ -28,6 +28,16 @@ type Video struct {
 	Thumbnail   string         `json:"thumbnail"`
 	Status      string         `json:"status" gorm:"default:'uploading'"`
 	Type        string         `json:"type" gorm:"default:'video'"` // video, audio, image
+
+	// 新增字段支持AI生成视频
+	Title       string         `json:"title"`
+	Description string         `json:"description" gorm:"type:text"`
+	FileURL     string         `json:"file_url"`
+	Resolution  string         `json:"resolution"`
+	FrameRate   int            `json:"frame_rate"`
+	ProcessedAt *time.Time     `json:"processed_at"`
+	Error       string         `json:"error" gorm:"type:text"`
+
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`

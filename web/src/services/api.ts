@@ -10,10 +10,21 @@ interface ApiResponse<T = any> {
   timestamp?: string;
 }
 
+// 获取API基础URL
+const getApiBaseUrl = (): string => {
+  // 在生产环境中使用相对路径（nginx代理）
+  // 在开发环境中使用完整URL
+  if (import.meta.env.PROD) {
+    return '/api/v1';
+  }
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  return `${apiUrl}/api/v1`;
+};
+
 // 创建axios实例
 const createApiClient = (): AxiosInstance => {
   const client = axios.create({
-    baseURL: '/api/v1',
+    baseURL: getApiBaseUrl(),
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',

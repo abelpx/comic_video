@@ -40,14 +40,40 @@ func NewConnection(cfg *config.DatabaseConfig) (*gorm.DB, error) {
 func AutoMigrate(db *gorm.DB) error {
 	// 导入所有实体
 	entities := []interface{}{
+		// 原有实体
 		&entity.User{},
 		&entity.Project{},
 		&entity.Video{},
 		&entity.Template{},
 		&entity.Material{},
 		&entity.Render{},
-		&entity.Task{}, // 新增
+		&entity.Task{},
+
+		// 新增工作流相关实体
+		&entity.Workflow{},
+		&entity.WorkflowTask{},
+
+		// 剧本相关实体
+		&entity.Script{},
+		&entity.ScriptScene{},
+
+		// 角色相关实体
+		&entity.Character{},
+		&entity.CharacterImage{},
+
+		// 场景相关实体
+		&entity.Scene{},
+		&entity.SceneImage{},
+
+		// 分镜相关实体
+		&entity.Storyboard{},
+		&entity.StoryboardFrame{},
+
+		// 音频相关实体
+		&entity.Audio{},
+		&entity.VoiceGeneration{},
+		&entity.MusicGeneration{},
 	}
 
 	return db.AutoMigrate(entities...)
-} 
+}

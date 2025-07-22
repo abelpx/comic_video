@@ -12,18 +12,27 @@ import (
 
 	"comic_video/internal/api/routes"
 	"comic_video/internal/config"
+	"comic_video/internal/domain/entity"
 	"comic_video/internal/repository/minio"
 	"comic_video/internal/repository/postgres"
 	"comic_video/internal/repository/redis"
+	"comic_video/internal/service/ai"
 	"comic_video/internal/service/auth"
+	"comic_video/internal/service/character"
+	"comic_video/internal/service/editing"
 	"comic_video/internal/service/material"
+	"comic_video/internal/service/music"
 	"comic_video/internal/service/project"
+	"comic_video/internal/service/publishing"
 	"comic_video/internal/service/render"
+	"comic_video/internal/service/scene"
+	"comic_video/internal/service/script"
+	"comic_video/internal/service/storyboard"
 	"comic_video/internal/service/template"
 	"comic_video/internal/service/user"
 	"comic_video/internal/service/video"
-	"comic_video/internal/service/ai"
-	"comic_video/internal/domain/entity"
+	"comic_video/internal/service/voice"
+	"comic_video/internal/service/workflow"
 	"github.com/gin-gonic/gin"
 )
 
@@ -99,7 +108,34 @@ func main() {
 	sdClient := ai.NewSDClient(cfg.AI.SDEndpoint)
 	ollamaClient := &ai.OllamaClient{Endpoint: cfg.AI.OllamaEndpoint, Model: cfg.AI.OllamaModel, ApiKey: cfg.AI.OllamaApiKey}
 	ttsClient := &ai.TTSClient{Endpoint: cfg.AI.TTSEndpoint}
-	// 可根据需要初始化 WhisperClient 等
+	whisperClient := &ai.WhisperClient{Endpoint: cfg.AI.WhisperEndpoint}
+
+	// 初始化AI服务
+	aiService := ai.NewService(sdClient, ollamaClient, ttsClient, whisperClient, minioClient, redisClient)
+
+	// 初始化各个专门服务
+	scriptService := script.NewService(db, aiService)
+	characterService := character.NewService(db, aiService)
+	sceneService := scene.NewService(db, aiService)
+	storyboardService := storyboard.NewService(db, aiService)
+	voiceService := voice.NewService(db, aiService)
+	musicService := music.NewService(db, aiService)
+	editingService := editing.NewService(db, aiService)
+	publishingService := publishing.NewService(db, aiService)
+
+	// 初始化工作流引擎
+	workflowEngine := workflow.NewWorkflowEngine(
+		db,
+		scriptService,
+		characterService,
+		sceneService,
+		storyboardService,
+		voiceService,
+		musicService,
+		editingService,
+		publishingService,
+		cfg.AI.MaxConcurrentTasks,
+	)
 
 	// 初始化通用任务队列
 	taskQueue := ai.NewMemoryTaskQueue(100)
@@ -158,7 +194,8 @@ func main() {
 		projectService,
 		materialService,
 		redisClient,
-		taskQueue, // 新增参数
+		taskQueue,
+		workflowEngine, // 新增工作流引擎参数
 	)
 
 	// 创建HTTP服务器

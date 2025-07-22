@@ -59,12 +59,29 @@ type JWTConfig struct {
 
 // AIConfig AI配置
 type AIConfig struct {
-	SDEndpoint      string
-	OllamaEndpoint  string
-	OllamaModel     string
-	OllamaApiKey    string // 新增
+	// 文本生成
+	OllamaEndpoint string
+	OllamaModel    string
+	OllamaApiKey   string
+
+	// 图像生成
+	SDEndpoint   string
+	SDTimeout    string
+	SDMaxRetries int
+
+	// 语音相关
 	WhisperEndpoint string
 	TTSEndpoint     string
+
+	// 视频生成
+	VideoGenEndpoint string
+
+	// 音乐生成
+	MusicGenEndpoint string
+
+	// 工作流配置
+	MaxConcurrentTasks int
+	TaskTimeout        string
 }
 
 // Load 加载配置
@@ -107,12 +124,29 @@ func Load() *Config {
 			Expire:    getEnvAsInt("JWT_EXPIRE", 24*60*60), // 24小时
 		},
 		AI: AIConfig{
-			SDEndpoint:      getEnv("SD_ENDPOINT", "http://127.0.0.1:7860"),
-			OllamaEndpoint:  getEnv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434"),
-			OllamaModel:     getEnv("OLLAMA_MODEL", "llama2"),
-			OllamaApiKey:    getEnv("OLLAMA_API_KEY", ""),
+			// 文本生成
+			OllamaEndpoint: getEnv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434"),
+			OllamaModel:    getEnv("OLLAMA_MODEL", "deepseek-r1:14b"),
+			OllamaApiKey:   getEnv("OLLAMA_API_KEY", ""),
+
+			// 图像生成
+			SDEndpoint:   getEnv("SD_ENDPOINT", "http://127.0.0.1:7860"),
+			SDTimeout:    getEnv("SD_TIMEOUT", "300s"),
+			SDMaxRetries: getEnvAsInt("SD_MAX_RETRIES", 3),
+
+			// 语音相关
 			WhisperEndpoint: getEnv("WHISPER_ENDPOINT", "http://127.0.0.1:9000"),
 			TTSEndpoint:     getEnv("TTS_ENDPOINT", "http://127.0.0.1:50021"),
+
+			// 视频生成
+			VideoGenEndpoint: getEnv("VIDEO_GEN_ENDPOINT", "http://127.0.0.1:8000"),
+
+			// 音乐生成
+			MusicGenEndpoint: getEnv("MUSIC_GEN_ENDPOINT", "http://127.0.0.1:8001"),
+
+			// 工作流配置
+			MaxConcurrentTasks: getEnvAsInt("MAX_CONCURRENT_TASKS", 5),
+			TaskTimeout:        getEnv("TASK_TIMEOUT", "1800s"),
 		},
 	}
 
@@ -167,4 +201,4 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
-} 
+}

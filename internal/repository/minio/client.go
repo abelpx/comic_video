@@ -1,6 +1,7 @@
 package minio
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 // MinioClient MinIO 客户端接口
 type MinioClient interface {
 	Upload(ctx context.Context, objectName string, reader io.Reader, objectSize int64, contentType string) (string, error)
+	UploadFromBytes(ctx context.Context, objectName string, data []byte, contentType string) (string, error)
 	Delete(ctx context.Context, objectName string) error
 	GetURL(objectName string) string
 	PresignedURL(ctx context.Context, objectName string, expiry time.Duration) (string, error)
@@ -69,6 +71,18 @@ func (c *client) Upload(ctx context.Context, objectName string, reader io.Reader
 	return c.GetURL(objectName), nil
 }
 
+// UploadFromBytes 从字节数组上传文件
+func (c *client) UploadFromBytes(ctx context.Context, objectName string, data []byte, contentType string) (string, error) {
+	reader := bytes.NewReader(data)
+	_, err := c.client.PutObject(ctx, c.bucketName, objectName, reader, int64(len(data)), minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", err
+	}
+	return c.GetURL(objectName), nil
+}
+
 // Delete 删除文件
 func (c *client) Delete(ctx context.Context, objectName string) error {
 	return c.client.RemoveObject(ctx, c.bucketName, objectName, minio.RemoveObjectOptions{})
@@ -107,4 +121,4 @@ func (c *client) PutObject(ctx context.Context, bucketName, objectName string, r
 // DeleteObject 删除对象
 func (c *client) DeleteObject(ctx context.Context, bucketName, objectName string) error {
 	return c.client.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{})
-} 
+}
