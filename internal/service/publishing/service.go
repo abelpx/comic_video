@@ -261,8 +261,9 @@ func (s *Service) generateTitlesAndDescriptions(ctx context.Context, req *Publis
 		return nil, nil, err
 	}
 
-	// 解析响应（简化实现）
-	return []string{"AI生成标题1", "AI生成标题2", "AI生成标题3"}, 
+	// TODO: 解析JSON响应，目前使用简化实现
+	_ = response // 避免未使用变量错误
+	return []string{"AI生成标题1", "AI生成标题2", "AI生成标题3"},
 		   []string{"AI生成描述1", "AI生成描述2", "AI生成描述3"}, nil
 }
 

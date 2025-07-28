@@ -47,14 +47,15 @@ func (s *Service) GenerateCharacters(ctx context.Context, req *GenerateCharacter
 
 	// 2. 为每个角色创建详细信息和生成图像
 	for _, profile := range characterProfiles {
-		character, err := s.createCharacterFromProfile(ctx, req.ProjectID, profile)
+		projectUUID, _ := uuid.Parse(req.ProjectID)
+		character, err := s.createCharacterFromProfile(ctx, projectUUID, profile)
 		if err != nil {
 			log.Printf("[CharacterService] 创建角色失败: %s, error: %v", profile.Name, err)
 			continue
 		}
 
-		// 生成角色图像
-		if err := s.generateCharacterImages(ctx, character); err != nil {
+		// 根据角色重要性决定生成图像的数量和质量
+		if err := s.generateCharacterImagesWithPriority(ctx, character, profile.Importance); err != nil {
 			log.Printf("[CharacterService] 生成角色图像失败: %s, error: %v", character.Name, err)
 		}
 
@@ -67,13 +68,14 @@ func (s *Service) GenerateCharacters(ctx context.Context, req *GenerateCharacter
 
 // extractCharacterProfiles 从剧本中提取角色信息
 func (s *Service) extractCharacterProfiles(ctx context.Context, scriptContent string) ([]*CharacterProfile, error) {
-	prompt := fmt.Sprintf(`分析以下剧本，提取主要角色的详细信息：
+	prompt := fmt.Sprintf(`分析以下剧本，提取所有重要角色的详细信息：
 
 要求：
-1. 识别主要角色（最多8个）
+1. 识别所有重要角色（主角、配角、有台词或重要作用的次要角色）
 2. 为每个角色提供详细的外观描述
 3. 分析角色的性格特征和风格
 4. 确保描述适合AI图像生成
+5. 按重要性排序，主角在前，配角次之
 
 输出JSON格式：
 [
@@ -87,6 +89,8 @@ func (s *Service) extractCharacterProfiles(ctx context.Context, scriptContent st
     "body_type": "体型描述",
     "personality": "性格特征",
     "role": "在故事中的作用",
+    "importance": "角色重要性（主角/重要配角/次要角色/群众角色）",
+    "screen_time": "预估出场频率（高/中/低）",
     "art_style": "艺术风格（如anime, realistic等）",
     "visual_keywords": "视觉关键词，用逗号分隔"
   }
@@ -126,6 +130,8 @@ func (s *Service) createCharacterFromProfile(ctx context.Context, projectID uuid
 		Clothing:          profile.Clothing,
 		BodyType:          profile.BodyType,
 		Personality:       profile.Personality,
+		Importance:        profile.Importance,    // 新增：角色重要性
+		ScreenTime:        profile.ScreenTime,   // 新增：出场频率
 		ArtStyle:          profile.ArtStyle,
 		VisualKeywords:    profile.VisualKeywords,
 		ColorScheme:       s.generateColorScheme(profile),
@@ -147,6 +153,71 @@ func (s *Service) generateCharacterImages(ctx context.Context, character *entity
 	for _, imageType := range imageTypes {
 		prompt := s.buildImagePrompt(character, imageType)
 		
+		// 调用AI图像生成服务
+		imageURL, err := s.aiService.GenerateImage(ctx, prompt, character.Seed)
+		if err != nil {
+			log.Printf("[CharacterService] 生成图像失败: %s, type: %s, error: %v", character.Name, imageType, err)
+			continue
+		}
+
+		// 保存图像记录
+		characterImage := &entity.CharacterImage{
+			CharacterID: character.ID,
+			ImageURL:    imageURL,
+			ImageType:   imageType,
+			Prompt:      prompt,
+			Seed:        character.Seed,
+			IsReference: imageType == "portrait", // 肖像作为参考图
+		}
+
+		if err := s.imageRepo.Create(ctx, characterImage); err != nil {
+			log.Printf("[CharacterService] 保存图像记录失败: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// generateCharacterImagesWithPriority 根据角色重要性生成不同数量的图像
+func (s *Service) generateCharacterImagesWithPriority(ctx context.Context, character *entity.Character, importance string) error {
+	var imageTypes []string
+
+	// 根据角色重要性决定生成的图像类型
+	switch strings.ToLower(importance) {
+	case "主角":
+		// 主角生成最全面的图像集
+		imageTypes = []string{
+			"portrait", "full_body", "close_up",
+			"expression_happy", "expression_sad", "expression_angry", "expression_surprised",
+			"action_pose", "casual_outfit", "formal_outfit",
+		}
+	case "重要配角":
+		// 重要配角生成较多图像
+		imageTypes = []string{
+			"portrait", "full_body",
+			"expression_happy", "expression_sad", "expression_neutral",
+			"action_pose",
+		}
+	case "次要角色":
+		// 次要角色生成基础图像
+		imageTypes = []string{
+			"portrait", "full_body", "expression_neutral",
+		}
+	case "群众角色":
+		// 群众角色只生成基本肖像
+		imageTypes = []string{"portrait"}
+	default:
+		// 默认按配角处理
+		imageTypes = []string{
+			"portrait", "full_body", "expression_happy", "expression_sad",
+		}
+	}
+
+	log.Printf("[CharacterService] 为角色 %s (%s) 生成 %d 种图像", character.Name, importance, len(imageTypes))
+
+	for _, imageType := range imageTypes {
+		prompt := s.buildImagePrompt(character, imageType)
+
 		// 调用AI图像生成服务
 		imageURL, err := s.aiService.GenerateImage(ctx, prompt, character.Seed)
 		if err != nil {
@@ -285,8 +356,10 @@ func (s *Service) cleanJSONResponse(response string) string {
 
 // GenerateCharactersRequest 生成角色请求
 type GenerateCharactersRequest struct {
-	ProjectID     uuid.UUID `json:"project_id"`
-	ScriptContent string    `json:"script_content"`
+	ProjectID string `json:"project_id"`
+	Script    string `json:"script"`
+	ScriptContent string `json:"script_content"`
+	Style     string `json:"style"`
 }
 
 // CharacterProfile 角色档案
@@ -300,6 +373,8 @@ type CharacterProfile struct {
 	BodyType       string `json:"body_type"`
 	Personality    string `json:"personality"`
 	Role           string `json:"role"`
+	Importance     string `json:"importance"`     // 角色重要性
+	ScreenTime     string `json:"screen_time"`    // 预估出场频率
 	ArtStyle       string `json:"art_style"`
 	VisualKeywords string `json:"visual_keywords"`
 }

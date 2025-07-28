@@ -43,12 +43,12 @@ func (s *Service) ComposeVideo(ctx context.Context, req *ComposeVideoRequest) (*
 
 	// 2. 创建视频记录
 	video := &entity.Video{
-		ProjectID:   req.ProjectID,
+		ProjectID:   &req.ProjectID,
 		UserID:      req.UserID,
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      "processing",
-		Duration:    req.EstimatedDuration,
+		Duration:    float64(req.EstimatedDuration),
 		Resolution:  req.Resolution,
 		FrameRate:   req.FrameRate,
 		Format:      "mp4",

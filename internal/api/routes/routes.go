@@ -139,6 +139,8 @@ func SetupRoutes(
 	{
 		ai.POST("/novel-to-video", aiHandler.NovelToVideo)
 		ai.POST("/generate-novel", aiHandler.GenerateNovel)
+		ai.POST("/generate-tweet", aiHandler.GenerateTweet)     // 新增：推文生成
+		ai.POST("/novel-to-tweet", aiHandler.NovelToTweet)      // 新增：小说转推文
 		ai.POST("/novel-to-all", aiHandler.NovelToAll)
 		ai.GET("/quota", aiHandler.GetUserQuota)        // 获取用户配额
 		ai.GET("/usage-stats", aiHandler.GetUsageStats) // 获取使用统计

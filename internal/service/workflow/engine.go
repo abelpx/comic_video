@@ -240,7 +240,7 @@ type CreateWorkflowRequest struct {
 
 // createWorkflowTasks 创建工作流任务
 func (e *WorkflowEngine) createWorkflowTasks(ctx context.Context, workflowID uuid.UUID, steps []entity.WorkflowStep) error {
-	for i, step := range steps {
+	for _, step := range steps {
 		task := &entity.WorkflowTask{
 			WorkflowID: workflowID,
 			Step:       step,
@@ -271,7 +271,7 @@ func (e *WorkflowEngine) executeScriptAdapt(ctx context.Context, task *entity.Wo
 
 	// 调用剧本服务
 	req := &script.AdaptScriptRequest{
-		ProjectID: task.Workflow.ProjectID,
+		ProjectID: task.Workflow.ProjectID.String(),
 		Title:     input.Title,
 		NovelText: input.NovelText,
 	}
@@ -295,7 +295,7 @@ func (e *WorkflowEngine) executeCharacterGen(ctx context.Context, task *entity.W
 	}
 
 	req := &character.GenerateCharactersRequest{
-		ProjectID:     task.Workflow.ProjectID,
+		ProjectID:     task.Workflow.ProjectID.String(),
 		ScriptContent: input.ScriptContent,
 	}
 
@@ -343,7 +343,7 @@ func (e *WorkflowEngine) executeStoryboard(ctx context.Context, task *entity.Wor
 	}
 
 	req := &storyboard.GenerateStoryboardRequest{
-		ProjectID:     task.Workflow.ProjectID,
+		ProjectID:     task.Workflow.ProjectID.String(),
 		ScriptID:      input.ScriptID,
 		Title:         input.Title,
 		ScriptContent: input.ScriptContent,

@@ -44,8 +44,9 @@ func (s *Service) GenerateStoryboard(ctx context.Context, req *GenerateStoryboar
 	}
 
 	// 2. 创建分镜实体
+	projectUUID, _ := uuid.Parse(req.ProjectID)
 	storyboard := &entity.Storyboard{
-		ProjectID:   req.ProjectID,
+		ProjectID:   projectUUID,
 		ScriptID:    req.ScriptID,
 		Title:       req.Title,
 		Description: storyboardPlan.Description,
@@ -230,10 +231,14 @@ func (s *Service) cleanJSONResponse(response string) string {
 
 // GenerateStoryboardRequest 生成分镜请求
 type GenerateStoryboardRequest struct {
-	ProjectID     uuid.UUID `json:"project_id"`
-	ScriptID      uuid.UUID `json:"script_id"`
-	Title         string    `json:"title"`
-	ScriptContent string    `json:"script_content"`
+	ProjectID     string                 `json:"project_id"`
+	ScriptID      uuid.UUID              `json:"script_id"`
+	Script        string                 `json:"script"`
+	Title         string                 `json:"title"`
+	ScriptContent string                 `json:"script_content"`
+	Characters    []*entity.Character    `json:"characters"`
+	Scenes        []*entity.Scene        `json:"scenes"`
+	Style         string                 `json:"style"`
 }
 
 // StoryboardPlan 分镜计划

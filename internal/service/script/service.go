@@ -51,8 +51,9 @@ func (s *Service) AdaptNovelToScript(ctx context.Context, req *AdaptScriptReques
 	}
 
 	// 3. 创建剧本实体
+	projectUUID, _ := uuid.Parse(req.ProjectID)
 	script := &entity.Script{
-		ProjectID:  req.ProjectID,
+		ProjectID:  projectUUID,
 		Title:      req.Title,
 		Type:       entity.ScriptTypeAdapted,
 		Content:    scriptContent,
@@ -88,7 +89,7 @@ func (s *Service) analyzeNovelStructure(ctx context.Context, novelText string) (
 	prompt := fmt.Sprintf(`请分析以下小说的结构，提取关键信息：
 
 要求：
-1. 识别主要角色（最多5个）
+1. 识别所有重要角色（包括主角、配角、重要的次要角色）
 2. 分析故事情节结构
 3. 识别主要场景和地点
 4. 分析对话和叙述比例
@@ -263,9 +264,11 @@ func (s *Service) formatAnalysisForPrompt(analysis *NovelAnalysis) string {
 
 // AdaptScriptRequest 改编剧本请求
 type AdaptScriptRequest struct {
-	ProjectID uuid.UUID `json:"project_id"`
-	Title     string    `json:"title"`
-	NovelText string    `json:"novel_text"`
+	ProjectID string `json:"project_id"`
+	Title     string `json:"title"`
+	Novel     string `json:"novel"`
+	NovelText string `json:"novel_text"`
+	Style     string `json:"style"`
 }
 
 // NovelAnalysis 小说分析结果

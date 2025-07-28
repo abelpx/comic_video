@@ -18,7 +18,7 @@ import (
 
 	"comic_video/internal/domain/entity"
 	"comic_video/internal/repository/minio"
-	
+	"comic_video/internal/repository/redis"
 )
 
 // Service AI服务

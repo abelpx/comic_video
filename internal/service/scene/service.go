@@ -269,6 +269,14 @@ type GenerateScenesRequest struct {
 	ScriptContent string    `json:"script_content"`
 }
 
+// GenerateSceneRequest 生成场景请求（兼容性）
+type GenerateSceneRequest struct {
+	ProjectID string `json:"project_id"`
+	Script    string `json:"script"`
+	ScriptContent string `json:"script_content"`
+	Style     string `json:"style"`
+}
+
 // SceneAnalysis 场景分析结果
 type SceneAnalysis struct {
 	Name         string `json:"name"`

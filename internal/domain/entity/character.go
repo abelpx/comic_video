@@ -21,6 +21,8 @@ type Character struct {
 	Clothing        string         `json:"clothing" gorm:"type:text"`
 	BodyType        string         `json:"body_type"`
 	Personality     string         `json:"personality" gorm:"type:text"`
+	Importance      string         `json:"importance"`      // 角色重要性：主角/重要配角/次要角色/群众角色
+	ScreenTime      string         `json:"screen_time"`     // 预估出场频率：高/中/低
 	ArtStyle        string         `json:"art_style"`
 	VisualKeywords  string         `json:"visual_keywords" gorm:"type:text"`
 	ColorScheme     string         `json:"color_scheme"`
