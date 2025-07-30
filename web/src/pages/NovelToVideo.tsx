@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Button, Input, Typography, Progress, message, Card, Spin } from 'antd';
-import axios from 'axios';
+import { aiApi, taskApi } from '../services/api';
 
 const { Title, Paragraph } = Typography;
 
@@ -23,39 +23,45 @@ export default function NovelToVideo() {
     setProgress(0);
     setStatus('');
     try {
-      const res = await axios.post('/api/v1/ai/novel-to-all', { novel_prompt: novel });
-      if (res.data && res.data.task_id) {
-        setTaskId(res.data.task_id);
-        pollStatus(res.data.task_id);
+      const response = await aiApi.novelToAll(novel);
+      console.log('API Response:', response); // 调试日志
+      if (response && response.task_id) {
+        setTaskId(response.task_id);
+        pollStatus(response.task_id);
         message.success('任务已提交，正在生成...');
       } else {
         setLoading(false);
-        message.error('任务提交失败');
+        message.error('任务提交失败: 未返回任务ID');
       }
-    } catch (e) {
+    } catch (error: any) {
+      console.error('API Error:', error); // 调试日志
       setLoading(false);
-      message.error('任务提交异常');
+      const errorMessage = error.response?.data?.message || error.message || '任务提交异常';
+      message.error(`任务提交失败: ${errorMessage}`);
     }
   };
 
   const pollStatus = (id: string) => {
     timerRef.current = setInterval(async () => {
       try {
-        const res = await axios.get(`/api/v1/task/${id}/status`);
-        if (res.data && res.data.status) {
-          setProgress(res.data.progress || 0);
-          setStatus(res.data.status);
-          if (res.data.status === 'completed') {
+        const taskStatus = await taskApi.getTaskStatus(id);
+        console.log('Task Status:', taskStatus); // 调试日志
+        if (taskStatus) {
+          setProgress(taskStatus.progress || 0);
+          setStatus(taskStatus.status);
+          if (taskStatus.status === 'completed') {
             setLoading(false);
             clearInterval(timerRef.current!);
-            setResult(res.data.result ? JSON.parse(res.data.result) : null);
-          } else if (res.data.status === 'failed') {
+            setResult(taskStatus.result ? JSON.parse(taskStatus.result) : null);
+            message.success('任务完成！');
+          } else if (taskStatus.status === 'failed') {
             setLoading(false);
             clearInterval(timerRef.current!);
-            message.error(res.data.error || '生成失败');
+            message.error(taskStatus.error || '生成失败');
           }
         }
-      } catch {
+      } catch (error: any) {
+        console.error('Poll Status Error:', error); // 调试日志
         setLoading(false);
         clearInterval(timerRef.current!);
         message.error('进度查询失败');

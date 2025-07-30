@@ -7,19 +7,30 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"time"
 
+	"comic_video/internal/domain/entity"
+	"comic_video/internal/repository/postgres"
 	"comic_video/internal/service/ai"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Service 推文生成服务
 type Service struct {
-	aiService *ai.Service
+	aiService        *ai.Service
+	tweetRepo        *postgres.TweetRepository
+	templateRepo     *postgres.TweetTemplateRepository
+	db               *gorm.DB
 }
 
 // NewService 创建推文生成服务
-func NewService(aiService *ai.Service) *Service {
+func NewService(aiService *ai.Service, db *gorm.DB) *Service {
 	return &Service{
-		aiService: aiService,
+		aiService:    aiService,
+		tweetRepo:    postgres.NewTweetRepository(db),
+		templateRepo: postgres.NewTweetTemplateRepository(db),
+		db:           db,
 	}
 }
 
@@ -355,4 +366,252 @@ func (s *Service) cleanJSONResponse(response string) string {
 	}
 
 	return response
+}
+
+// SaveTweet 保存推文到数据库
+func (s *Service) SaveTweet(ctx context.Context, userID uuid.UUID, req *SaveTweetRequest) (*entity.Tweet, error) {
+	log.Printf("[TweetService] 保存推文: user_id=%s, content_length=%d", userID, len(req.Content))
+
+	// 创建推文实体
+	tweet := &entity.Tweet{
+		UserID:     userID,
+		Content:    req.Content,
+		Title:      req.Title,
+		Platform:   req.Platform,
+		Style:      req.Style,
+		Theme:      req.Theme,
+		Length:     len(req.Content),
+		Quality:    s.evaluateTweetQuality(req.Content, &TweetGenerationRequest{
+			Topic:    req.Theme,
+			Style:    req.Style,
+			Platform: req.Platform,
+		}),
+		SourceType: req.SourceType,
+		SourceData: req.SourceData,
+		Status:     "draft",
+	}
+
+	// 如果有项目ID，关联项目
+	if req.ProjectID != nil {
+		tweet.ProjectID = req.ProjectID
+	}
+
+	// 提取并保存话题标签
+	hashtags := s.extractHashtags(req.Content)
+	if len(hashtags) > 0 {
+		hashtagsJSON, _ := json.Marshal(hashtags)
+		tweet.Hashtags = string(hashtagsJSON)
+	}
+
+	// 保存到数据库
+	err := s.tweetRepo.Create(ctx, tweet)
+	if err != nil {
+		return nil, fmt.Errorf("保存推文失败: %w", err)
+	}
+
+	log.Printf("[TweetService] 推文保存成功: id=%s", tweet.ID)
+	return tweet, nil
+}
+
+// SaveTweetRequest 保存推文请求
+type SaveTweetRequest struct {
+	Content    string     `json:"content"`
+	Title      string     `json:"title"`
+	Platform   string     `json:"platform"`
+	Style      string     `json:"style"`
+	Theme      string     `json:"theme"`
+	SourceType string     `json:"source_type"` // novel/manual/template
+	SourceData string     `json:"source_data"`
+	ProjectID  *uuid.UUID `json:"project_id"`
+}
+
+// UpdateTweet 更新推文
+func (s *Service) UpdateTweet(ctx context.Context, userID uuid.UUID, tweetID uuid.UUID, req *UpdateTweetRequest) (*entity.Tweet, error) {
+	log.Printf("[TweetService] 更新推文: user_id=%s, tweet_id=%s", userID, tweetID)
+
+	// 获取现有推文
+	tweet, err := s.tweetRepo.GetByID(ctx, tweetID)
+	if err != nil {
+		return nil, fmt.Errorf("获取推文失败: %w", err)
+	}
+
+	// 检查权限
+	if tweet.UserID != userID {
+		return nil, fmt.Errorf("无权限修改此推文")
+	}
+
+	// 更新字段
+	if req.Content != "" {
+		tweet.Content = req.Content
+		tweet.Length = len(req.Content)
+		tweet.Quality = s.evaluateTweetQuality(req.Content, &TweetGenerationRequest{
+			Topic:    tweet.Theme,
+			Style:    tweet.Style,
+			Platform: tweet.Platform,
+		})
+
+		// 重新提取话题标签
+		hashtags := s.extractHashtags(req.Content)
+		if len(hashtags) > 0 {
+			hashtagsJSON, _ := json.Marshal(hashtags)
+			tweet.Hashtags = string(hashtagsJSON)
+		}
+	}
+
+	if req.Title != "" {
+		tweet.Title = req.Title
+	}
+
+	if req.Platform != "" {
+		tweet.Platform = req.Platform
+	}
+
+	if req.Style != "" {
+		tweet.Style = req.Style
+	}
+
+	if req.Theme != "" {
+		tweet.Theme = req.Theme
+	}
+
+	// 保存更新
+	err = s.tweetRepo.Update(ctx, tweet)
+	if err != nil {
+		return nil, fmt.Errorf("更新推文失败: %w", err)
+	}
+
+	log.Printf("[TweetService] 推文更新成功: id=%s", tweet.ID)
+	return tweet, nil
+}
+
+// UpdateTweetRequest 更新推文请求
+type UpdateTweetRequest struct {
+	Content  string `json:"content"`
+	Title    string `json:"title"`
+	Platform string `json:"platform"`
+	Style    string `json:"style"`
+	Theme    string `json:"theme"`
+}
+
+// GetTweet 获取推文
+func (s *Service) GetTweet(ctx context.Context, userID uuid.UUID, tweetID uuid.UUID) (*entity.Tweet, error) {
+	tweet, err := s.tweetRepo.GetByID(ctx, tweetID)
+	if err != nil {
+		return nil, fmt.Errorf("获取推文失败: %w", err)
+	}
+
+	// 检查权限
+	if tweet.UserID != userID {
+		return nil, fmt.Errorf("无权限访问此推文")
+	}
+
+	// 增加查看次数
+	_ = s.tweetRepo.IncrementViewCount(ctx, tweetID)
+
+	return tweet, nil
+}
+
+// ListTweets 获取用户推文列表
+func (s *Service) ListTweets(ctx context.Context, userID uuid.UUID, req *ListTweetsRequest) (*ListTweetsResponse, error) {
+	tweets, total, err := s.tweetRepo.ListByStatus(ctx, userID, req.Status, req.Limit, req.Offset)
+	if err != nil {
+		return nil, fmt.Errorf("获取推文列表失败: %w", err)
+	}
+
+	return &ListTweetsResponse{
+		Tweets: tweets,
+		Total:  total,
+		Limit:  req.Limit,
+		Offset: req.Offset,
+	}, nil
+}
+
+// ListTweetsRequest 推文列表请求
+type ListTweetsRequest struct {
+	Status string `json:"status"` // draft/published/archived
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
+}
+
+// ListTweetsResponse 推文列表响应
+type ListTweetsResponse struct {
+	Tweets []*entity.Tweet `json:"tweets"`
+	Total  int64           `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+}
+
+// DeleteTweet 删除推文
+func (s *Service) DeleteTweet(ctx context.Context, userID uuid.UUID, tweetID uuid.UUID) error {
+	// 获取推文检查权限
+	tweet, err := s.tweetRepo.GetByID(ctx, tweetID)
+	if err != nil {
+		return fmt.Errorf("获取推文失败: %w", err)
+	}
+
+	if tweet.UserID != userID {
+		return fmt.Errorf("无权限删除此推文")
+	}
+
+	// 删除推文
+	err = s.tweetRepo.Delete(ctx, tweetID)
+	if err != nil {
+		return fmt.Errorf("删除推文失败: %w", err)
+	}
+
+	log.Printf("[TweetService] 推文删除成功: id=%s", tweetID)
+	return nil
+}
+
+// PublishTweet 发布推文
+func (s *Service) PublishTweet(ctx context.Context, userID uuid.UUID, tweetID uuid.UUID) error {
+	// 获取推文检查权限
+	tweet, err := s.tweetRepo.GetByID(ctx, tweetID)
+	if err != nil {
+		return fmt.Errorf("获取推文失败: %w", err)
+	}
+
+	if tweet.UserID != userID {
+		return fmt.Errorf("无权限发布此推文")
+	}
+
+	// 更新状态为已发布
+	tweet.Status = "published"
+	now := time.Now()
+	tweet.PublishedAt = &now
+
+	err = s.tweetRepo.Update(ctx, tweet)
+	if err != nil {
+		return fmt.Errorf("发布推文失败: %w", err)
+	}
+
+	log.Printf("[TweetService] 推文发布成功: id=%s", tweetID)
+	return nil
+}
+
+// GetTweetStats 获取用户推文统计
+func (s *Service) GetTweetStats(ctx context.Context, userID uuid.UUID) (map[string]interface{}, error) {
+	return s.tweetRepo.GetStatsByUserID(ctx, userID)
+}
+
+// SearchTweets 搜索推文
+func (s *Service) SearchTweets(ctx context.Context, userID uuid.UUID, req *SearchTweetsRequest) (*ListTweetsResponse, error) {
+	tweets, total, err := s.tweetRepo.Search(ctx, userID, req.Keyword, req.Limit, req.Offset)
+	if err != nil {
+		return nil, fmt.Errorf("搜索推文失败: %w", err)
+	}
+
+	return &ListTweetsResponse{
+		Tweets: tweets,
+		Total:  total,
+		Limit:  req.Limit,
+		Offset: req.Offset,
+	}, nil
+}
+
+// SearchTweetsRequest 搜索推文请求
+type SearchTweetsRequest struct {
+	Keyword string `json:"keyword"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
 }

@@ -13,8 +13,10 @@ import (
 	"comic_video/internal/repository/redis"
 	"comic_video/internal/service/ai"
 	"comic_video/internal/service/workflow"
+	"comic_video/internal/service/tweet"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // SetupRoutes 设置路由
@@ -29,6 +31,8 @@ func SetupRoutes(
 	redisClient *redis.Client,
 	taskQueue ai.TaskQueue,
 	workflowEngine *workflow.WorkflowEngine, // 新增工作流引擎参数
+	aiService *ai.Service, // 新增AI服务参数
+	db *gorm.DB, // 新增数据库连接参数
 ) *gin.Engine {
 	router := gin.Default()
 
@@ -134,7 +138,7 @@ func SetupRoutes(
 	v1.GET("/tasks", taskHandler.GetUserTasks) // 获取用户任务列表
 
 	// AI 相关路由
-	aiHandler := handlers.NewAIHandler(redisClient, taskQueue)
+	aiHandler := handlers.NewAIHandler(redisClient, taskQueue, aiService, db)
 	ai := v1.Group("/ai")
 	{
 		ai.POST("/novel-to-video", aiHandler.NovelToVideo)
@@ -144,6 +148,65 @@ func SetupRoutes(
 		ai.POST("/novel-to-all", aiHandler.NovelToAll)
 		ai.GET("/quota", aiHandler.GetUserQuota)        // 获取用户配额
 		ai.GET("/usage-stats", aiHandler.GetUsageStats) // 获取使用统计
+	}
+
+	// TTS 相关路由
+	ttsHandler := handlers.NewTTSHandler(aiService.GetTTSClient())
+	tts := v1.Group("/tts")
+	{
+		// 公开接口（无需认证）
+		tts.GET("/health", ttsHandler.HealthCheck)           // 健康检查
+		tts.GET("/info", ttsHandler.GetServiceInfo)          // 服务信息
+		tts.GET("/voices", ttsHandler.GetVoices)             // 获取可用语音
+		tts.GET("/config", ttsHandler.GetConfig)             // 获取配置信息
+		tts.GET("/test", ttsHandler.TestVoice)               // 测试语音生成
+
+		// 需要认证的接口
+		authTTS := tts.Group("")
+		authTTS.Use(middleware.AuthMiddleware(authService))
+		{
+			authTTS.POST("/generate", ttsHandler.GenerateVoice) // 生成语音
+		}
+	}
+
+	// 推文相关路由
+	tweetService := tweet.NewService(aiService, db)
+	templateTweetService := tweet.NewTemplateService(db)
+	tweetHandler := handlers.NewTweetHandler(tweetService, templateTweetService, db)
+
+	tweets := v1.Group("/tweets")
+	tweets.Use(middleware.AuthMiddleware(authService)) // 推文功能需要认证
+	{
+		// 推文管理
+		tweets.POST("", tweetHandler.SaveTweet)                    // 保存推文
+		tweets.GET("", tweetHandler.ListTweets)                    // 获取推文列表
+		tweets.GET("/search", tweetHandler.SearchTweets)           // 搜索推文
+		tweets.GET("/stats", tweetHandler.GetTweetStats)           // 获取推文统计
+		tweets.GET("/:id", tweetHandler.GetTweet)                  // 获取推文详情
+		tweets.PUT("/:id", tweetHandler.UpdateTweet)               // 更新推文
+		tweets.DELETE("/:id", tweetHandler.DeleteTweet)            // 删除推文
+		tweets.POST("/:id/publish", tweetHandler.PublishTweet)     // 发布推文
+	}
+
+	// 推文模板相关路由
+	tweetTemplates := v1.Group("/tweet-templates")
+	{
+		// 公开模板（无需认证）
+		tweetTemplates.GET("", tweetHandler.ListTemplates)              // 获取模板列表
+		tweetTemplates.GET("/search", tweetHandler.SearchTemplates)     // 搜索模板
+		tweetTemplates.GET("/popular", tweetHandler.GetPopularTemplates) // 获取热门模板
+		tweetTemplates.GET("/categories", tweetHandler.GetTemplateCategories) // 获取模板分类
+		tweetTemplates.GET("/:id", tweetHandler.GetTemplate)            // 获取模板详情
+		tweetTemplates.POST("/:id/use", tweetHandler.UseTemplate)       // 使用模板
+
+		// 需要认证的模板操作
+		authTemplates := tweetTemplates.Group("")
+		authTemplates.Use(middleware.AuthMiddleware(authService))
+		{
+			authTemplates.POST("", tweetHandler.CreateTemplate)     // 创建模板
+			authTemplates.PUT("/:id", tweetHandler.UpdateTemplate)  // 更新模板
+			authTemplates.DELETE("/:id", tweetHandler.DeleteTemplate) // 删除模板
+		}
 	}
 
 	// 工作流相关路由

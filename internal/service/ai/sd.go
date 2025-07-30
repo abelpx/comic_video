@@ -216,7 +216,7 @@ func (s *SDClient) Txt2ImgWithConsistency(ctx context.Context, prompt string, ch
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{
-		Timeout: 3 * time.Minute,
+		Timeout: s.Timeout + 30*time.Second, // 使用配置的超时时间
 	}
 
 	resp, err := client.Do(req)

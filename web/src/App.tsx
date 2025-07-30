@@ -25,6 +25,9 @@ import NovelToVideo from './pages/NovelToVideo';
 import GenerateComic from './pages/GenerateComic';
 import GenerateTweet from './pages/GenerateTweet';
 import GenerateNovel from './pages/GenerateNovel';
+import TweetEditor from './pages/TweetEditor';
+import TweetTemplates from './pages/TweetTemplates';
+import TTSTest from './pages/TTSTest';
 import VideoToAnime from './pages/VideoToAnime';
 import WorksPage from './pages/WorksPage';
 import QuotaPage from './pages/QuotaPage';
@@ -70,6 +73,9 @@ export default function App() {
                         <Route path="generate-comic" element={<GenerateComic />} />
                         <Route path="generate-tweet" element={<GenerateTweet />} />
                         <Route path="generate-novel" element={<GenerateNovel />} />
+                        <Route path="tweet-editor" element={<TweetEditor />} />
+                        <Route path="tweet-templates" element={<TweetTemplates />} />
+                        <Route path="tts-test" element={<TTSTest />} />
                         <Route path="video-to-anime" element={<VideoToAnime />} />
                         <Route path="workflow" element={<WorkflowPage />} />
                         <Route path="works" element={<WorksPage />} />

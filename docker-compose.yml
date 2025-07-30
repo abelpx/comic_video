@@ -90,6 +90,12 @@ services:
     restart: unless-stopped
     networks:
       - vidcraft_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     profiles:
       - ai-services
 
@@ -139,7 +145,7 @@ services:
       - SD_TIMEOUT=300s
       - SD_MAX_RETRIES=3
       - WHISPER_ENDPOINT=http://host.docker.internal:9000
-      - TTS_ENDPOINT=http://host.docker.internal:50021
+      - TTS_ENDPOINT=http://tts:8000
       - VIDEO_GEN_ENDPOINT=http://host.docker.internal:8000
       - MUSIC_GEN_ENDPOINT=http://host.docker.internal:8001
 
@@ -157,6 +163,8 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      tts:
         condition: service_healthy
     restart: unless-stopped
     networks:

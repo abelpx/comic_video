@@ -50,6 +50,11 @@ func NewService(
 	}
 }
 
+// GetTTSClient 获取TTS客户端
+func (s *Service) GetTTSClient() *TTSClient {
+	return s.ttsClient
+}
+
 // GenerateText 生成文本
 func (s *Service) GenerateText(ctx context.Context, prompt string) (string, error) {
 	return s.ollamaClient.Generate(prompt, nil)

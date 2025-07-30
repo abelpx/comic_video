@@ -196,6 +196,8 @@ func main() {
 		redisClient,
 		taskQueue,
 		workflowEngine, // 新增工作流引擎参数
+		aiService,      // 新增AI服务参数
+		db,             // 新增数据库连接参数
 	)
 
 	// 创建HTTP服务器

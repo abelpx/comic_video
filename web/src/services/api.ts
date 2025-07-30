@@ -12,13 +12,9 @@ interface ApiResponse<T = any> {
 
 // 获取API基础URL
 const getApiBaseUrl = (): string => {
-  // 在生产环境中使用相对路径（nginx代理）
-  // 在开发环境中使用完整URL
-  if (import.meta.env.PROD) {
-    return '/api/v1';
-  }
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  return `${apiUrl}/api/v1`;
+  // 在开发环境和生产环境都使用相对路径
+  // 通过Vite代理或nginx代理来访问后端
+  return '/api/v1';
 };
 
 // 创建axios实例
@@ -38,13 +34,16 @@ const createApiClient = (): AxiosInstance => {
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
-      
+
       // 添加用户ID到header（临时方案）
       const user = useAppStore.getState().user;
       if (user) {
         config.headers['X-User-ID'] = user.id;
+      } else {
+        // 为匿名用户添加默认ID
+        config.headers['X-User-ID'] = 'anonymous';
       }
-      
+
       return config;
     },
     (error) => {

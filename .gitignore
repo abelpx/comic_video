@@ -5,3 +5,4 @@ node_modules
 postgres-data
 redis-data
 minio-data
+.vscode

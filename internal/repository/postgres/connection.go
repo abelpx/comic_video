@@ -73,6 +73,11 @@ func AutoMigrate(db *gorm.DB) error {
 		&entity.Audio{},
 		&entity.VoiceGeneration{},
 		&entity.MusicGeneration{},
+
+		// 推文相关实体
+		&entity.Tweet{},
+		&entity.TweetTemplate{},
+		&entity.TweetAnalysis{},
 	}
 
 	return db.AutoMigrate(entities...)

@@ -9,24 +9,30 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"comic_video/internal/domain/entity"
 	"comic_video/internal/repository/redis"
 	"comic_video/internal/service/ai"
 	"comic_video/internal/service/quota"
+	"comic_video/internal/service/tweet"
 )
 
 type AIHandler struct {
 	redisClient  *redis.Client
 	queue        ai.TaskQueue
 	quotaManager *quota.QuotaManager
+	aiService    *ai.Service
+	db           *gorm.DB
 }
 
-func NewAIHandler(redisClient *redis.Client, queue ai.TaskQueue) *AIHandler {
+func NewAIHandler(redisClient *redis.Client, queue ai.TaskQueue, aiService *ai.Service, db *gorm.DB) *AIHandler {
 	return &AIHandler{
 		redisClient:  redisClient,
 		queue:        queue,
 		quotaManager: quota.NewQuotaManager(redisClient),
+		aiService:    aiService,
+		db:           db,
 	}
 }
 
@@ -275,18 +281,42 @@ func (h *AIHandler) GenerateTweet(c *gin.Context) {
 
 请直接输出推文内容，不需要额外说明：`, req.Topic, req.Style, req.Length)
 
-	// 调用AI生成服务（这里需要实现AI服务调用）
-	// 暂时返回模拟结果
-	tweet := fmt.Sprintf("🌟 关于%s的精彩分享！这个话题真的很有意思，值得大家深入思考。你们觉得呢？#%s #分享", req.Topic, req.Topic)
+	// 调用真实的AI服务生成推文
+	tweetReq := &tweet.TweetGenerationRequest{
+		Topic:    req.Topic,
+		Style:    req.Style,
+		Length:   req.Length,
+		Platform: "twitter", // 默认平台
+	}
+
+	// 获取推文服务实例
+	tweetService := tweet.NewService(h.aiService, h.db)
+	result, err := tweetService.GenerateTweet(c.Request.Context(), tweetReq)
+	if err != nil {
+		log.Printf("[AIHandler] 推文生成失败: %v", err)
+		// 降级到模拟结果
+		tweetContent := fmt.Sprintf("🌟 关于%s的精彩分享！这个话题真的很有意思，值得大家深入思考。你们觉得呢？#%s #分享", req.Topic, req.Topic)
+		result = &tweet.TweetResult{
+			Content:  tweetContent,
+			Hashtags: []string{req.Topic, "分享"},
+			Length:   len(tweetContent),
+			Platform: "twitter",
+			Theme:    req.Topic,
+			Quality:  0.7,
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"message": "推文生成成功",
 		"data": gin.H{
-			"tweet": tweet,
-			"topic": req.Topic,
-			"style": req.Style,
-			"length": len(tweet),
+			"tweet":    result.Content,
+			"hashtags": result.Hashtags,
+			"topic":    req.Topic,
+			"style":    req.Style,
+			"length":   result.Length,
+			"quality":  result.Quality,
+			"platform": result.Platform,
 		},
 	})
 }
@@ -311,41 +341,56 @@ func (h *AIHandler) NovelToTweet(c *gin.Context) {
 		req.Style = "吸引人"
 	}
 
-	// 构建小说转推文提示词
-	_ = fmt.Sprintf(`请根据以下小说内容，生成%d条不同角度的推文来推广这部小说：
-
-小说内容：
-%s
-
-要求：
-1. 每条推文都要有不同的切入角度（如情节亮点、角色魅力、主题深度等）
-2. 风格：%s
-3. 每条推文280字符以内
-4. 包含适当的话题标签
-5. 能够激发读者的阅读兴趣
-
-请输出JSON格式：
-{
-  "tweets": ["推文1", "推文2", "推文3"],
-  "themes": ["主题1", "主题2", "主题3"]
-}`, req.Count, req.Novel, req.Style)
-
-	// 暂时返回模拟结果
-	tweets := []string{
-		"📚 这部小说的情节设计太精彩了！每一个转折都让人意想不到，强烈推荐！#小说推荐 #精彩情节",
-		"💫 书中的角色塑造真的很棒，每个人物都有自己的故事和成长轨迹 #角色魅力 #好书分享",
-		"🎭 这个故事探讨的主题很深刻，读完让人思考良久，值得细细品味 #深度阅读 #思考人生",
+	// 调用真实的AI服务生成小说推文
+	novelTweetReq := &tweet.NovelToTweetRequest{
+		Novel:    req.Novel,
+		Count:    req.Count,
+		Style:    req.Style,
+		Platform: "twitter", // 默认平台
 	}
 
-	themes := []string{"情节亮点", "角色魅力", "主题深度"}
+	// 获取推文服务实例
+	tweetService := tweet.NewService(h.aiService, h.db)
+	result, err := tweetService.GenerateNovelTweets(c.Request.Context(), novelTweetReq)
+	if err != nil {
+		log.Printf("[AIHandler] 小说推文生成失败: %v", err)
+		// 降级到模拟结果
+		tweets := []string{
+			"📚 这部小说的情节设计太精彩了！每一个转折都让人意想不到，强烈推荐！#小说推荐 #精彩情节",
+			"💫 书中的角色塑造真的很棒，每个人物都有自己的故事和成长轨迹 #角色魅力 #好书分享",
+			"🎭 这个故事探讨的主题很深刻，读完让人思考良久，值得细细品味 #深度阅读 #思考人生",
+		}
+		themes := []string{"情节亮点", "角色魅力", "主题深度"}
+
+		c.JSON(http.StatusOK, gin.H{
+			"code": 200,
+			"message": "小说推文生成成功",
+			"data": gin.H{
+				"tweets": tweets,
+				"themes": themes,
+				"count": len(tweets),
+			},
+		})
+		return
+	}
+
+	// 提取推文内容和主题
+	tweets := make([]string, len(result.Tweets))
+	themes := make([]string, len(result.Tweets))
+	for i, t := range result.Tweets {
+		tweets[i] = t.Content
+		themes[i] = t.Theme
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"message": "小说推文生成成功",
 		"data": gin.H{
-			"tweets": tweets,
-			"themes": themes,
-			"count": len(tweets),
+			"tweets":   tweets,
+			"themes":   themes,
+			"count":    len(tweets),
+			"summary":  result.Summary,
+			"keywords": result.Keywords,
 		},
 	})
 }

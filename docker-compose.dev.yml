@@ -1,0 +1,221 @@
+# 开发环境Docker Compose配置
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: vidcraft_postgres_dev
+    environment:
+      POSTGRES_DB: vidcraft
+      POSTGRES_USER: vidcraft
+      POSTGRES_PASSWORD: vidcraft123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vidcraft -d vidcraft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vidcraft_network
+    restart: unless-stopped
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: vidcraft_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vidcraft_network
+    restart: unless-stopped
+
+  # MinIO 对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: vidcraft_minio_dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data_dev:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - vidcraft_network
+    restart: unless-stopped
+
+  # TTS 语音合成服务
+  tts:
+    image: soar97/triton-spark-tts:25.02
+    container_name: vidcraft_tts_dev
+    shm_size: '1gb'
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+    environment:
+      - PYTHONIOENCODING=utf-8
+      - MODEL_ID=${MODEL_ID:-spark-tts}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    command: >
+      /bin/bash -c "rm -rf Spark-TTS && git clone https://github.com/SparkAudio/Spark-TTS.git && cd Spark-TTS/runtime/triton_trtllm && bash run.sh 0 3"
+    restart: unless-stopped
+    networks:
+      - vidcraft_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    profiles:
+      - ai-services
+
+  # API 服务 (开发模式 - 热重载)
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: vidcraft_api_dev
+    ports:
+      - "8080:8080"
+    volumes:
+      # 挂载源代码目录 - 实现热重载
+      - .:/app
+      - /app/tmp  # 排除tmp目录避免权限问题
+      - go_mod_cache:/go/pkg/mod  # 缓存Go模块
+    environment:
+      # 数据库配置
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=vidcraft
+      - DB_PASSWORD=vidcraft123
+      - DB_NAME=vidcraft
+      - DB_SSLMODE=disable
+
+      # Redis配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+
+      # MinIO配置
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - MINIO_USE_SSL=false
+      - MINIO_BUCKET=vidcraft
+
+      # JWT配置
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_EXPIRE_HOURS=24
+
+      # 服务配置
+      - SERVER_PORT=8080
+      - SERVER_MODE=debug
+      - LOG_LEVEL=debug
+
+      # AI服务配置
+      - OLLAMA_ENDPOINT=http://host.docker.internal:11434
+      - OLLAMA_MODEL=deepseek-r1:14b
+      - OLLAMA_API_KEY=
+      - SD_ENDPOINT=http://host.docker.internal:7860
+      - SD_TIMEOUT=300s
+      - SD_MAX_RETRIES=3
+      - WHISPER_ENDPOINT=http://host.docker.internal:9000
+      - TTS_ENDPOINT=http://tts:8000
+      - VIDEO_GEN_ENDPOINT=http://host.docker.internal:8000
+      - MUSIC_GEN_ENDPOINT=http://host.docker.internal:8001
+
+      # 开发模式配置
+      - GIN_MODE=debug
+      - CGO_ENABLED=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - vidcraft_network
+    restart: unless-stopped
+
+  # 前端服务 (开发模式)
+  web-dev:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: vidcraft_web_dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # 挂载前端源代码 - 实现热重载
+      - ./web:/app
+      - /app/node_modules  # 排除node_modules避免权限问题
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - CHOKIDAR_USEPOLLING=true  # 在Docker中启用文件监听
+      - WATCHPACK_POLLING=true
+    networks:
+      - vidcraft_network
+    restart: unless-stopped
+
+  # Ollama AI服务 (开发模式)
+  ollama-dev:
+    image: ollama/ollama:latest
+    container_name: vidcraft_ollama_dev
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data_dev:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - vidcraft_network
+    restart: unless-stopped
+    # 如果有GPU，可以启用GPU支持
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+  minio_data_dev:
+  go_mod_cache:
+  ollama_data_dev:
+
+networks:
+  vidcraft_network:
+    driver: bridge
