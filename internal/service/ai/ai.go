@@ -23,11 +23,16 @@ import (
 
 // Service AI服务
 type Service struct {
-	sdClient      *SDClient
-	ollamaClient  *OllamaClient
-	ttsClient     *TTSClient
-	whisperClient *WhisperClient
-	minioClient   minio.MinioClient
+	sdClient        *SDClient
+	ollamaClient    *OllamaClient
+	ttsClient       *TTSClient
+	whisperClient   *WhisperClient
+	minioClient     minio.MinioClient
+	// 内置引擎
+	modelManager    *ModelManager
+	inferenceEngine *InferenceEngine
+	workflowManager *WorkflowManager
+	useBuiltinEngine bool
 	redisClient   *redis.Client
 }
 
@@ -40,14 +45,42 @@ func NewService(
 	minioClient minio.MinioClient,
 	redisClient *redis.Client,
 ) *Service {
-	return &Service{
-		sdClient:      sdClient,
-		ollamaClient:  ollamaClient,
-		ttsClient:     ttsClient,
-		whisperClient: whisperClient,
-		minioClient:   minioClient,
-		redisClient:   redisClient,
+	service := &Service{
+		sdClient:         sdClient,
+		ollamaClient:     ollamaClient,
+		ttsClient:        ttsClient,
+		whisperClient:    whisperClient,
+		minioClient:      minioClient,
+		redisClient:      redisClient,
+		useBuiltinEngine: true, // 默认使用内置引擎
 	}
+
+	// 初始化内置引擎
+	service.initBuiltinEngine()
+
+	return service
+}
+
+// initBuiltinEngine 初始化内置引擎
+func (s *Service) initBuiltinEngine() {
+	// 创建模型管理器
+	modelsPath := "./models" // 可以从配置文件读取
+	maxMemoryGB := 12.0      // 为16GB显存预留4GB给其他用途
+
+	s.modelManager = NewModelManager(modelsPath, maxMemoryGB)
+	if err := s.modelManager.InitializeModels(); err != nil {
+		log.Printf("[AI] 模型管理器初始化失败: %v", err)
+		s.useBuiltinEngine = false
+		return
+	}
+
+	// 创建推理引擎
+	s.inferenceEngine = NewInferenceEngine(s.modelManager)
+
+	// 创建工作流管理器
+	s.workflowManager = NewWorkflowManager(s.modelManager, s.inferenceEngine)
+
+	log.Printf("[AI] 内置引擎初始化完成")
 }
 
 // GetTTSClient 获取TTS客户端
@@ -151,6 +184,16 @@ type SceneContext struct {
 
 // ProcessNovelToVideo: 小说转动漫视频一键生成主流程
 func ProcessNovelToVideo(ctx context.Context, task *entity.Task, redisClient *redis.Client, sd *SDClient, ollama *OllamaClient, tts *TTSClient, minioBucket string) error {
+	// 初始化任务步骤
+	steps := []entity.TaskStep{
+		{Name: "script_generation", Status: "pending", Description: "生成分镜脚本"},
+		{Name: "image_generation", Status: "pending", Description: "生成图片"},
+		{Name: "voice_generation", Status: "pending", Description: "生成配音"},
+		{Name: "video_composition", Status: "pending", Description: "合成视频"},
+	}
+
+	stepsJSON, _ := json.Marshal(steps)
+	task.Steps = string(stepsJSON)
 	task.Status = entity.TaskStatusProcessing
 	task.Progress = 5
 	task.UpdatedAt = time.Now()
@@ -159,9 +202,44 @@ func ProcessNovelToVideo(ctx context.Context, task *entity.Task, redisClient *re
 	log.Printf("[AI] Ollama模型: %s", ollama.Model)
 	log.Printf("[AI] Ollama状态: endpoint=%s apikey=%s", ollama.Endpoint, ollama.ApiKey)
 
+	// 辅助函数：更新步骤状态
+	updateStepStatus := func(stepName, status string, progress int, result, errorMsg string) {
+		var currentSteps []entity.TaskStep
+		if task.Steps != "" {
+			json.Unmarshal([]byte(task.Steps), &currentSteps)
+		}
+
+		for i := range currentSteps {
+			if currentSteps[i].Name == stepName {
+				currentSteps[i].Status = status
+				currentSteps[i].Progress = progress
+				if status == "processing" && currentSteps[i].StartTime.IsZero() {
+					currentSteps[i].StartTime = time.Now()
+				}
+				if status == "completed" || status == "failed" {
+					currentSteps[i].EndTime = time.Now()
+				}
+				if result != "" {
+					currentSteps[i].Result = result
+				}
+				if errorMsg != "" {
+					currentSteps[i].Error = errorMsg
+				}
+				break
+			}
+		}
+
+		stepsJSON, _ := json.Marshal(currentSteps)
+		task.Steps = string(stepsJSON)
+		task.UpdatedAt = time.Now()
+		_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
+	}
+
 	// 初始化提示词翻译器
 	InitPromptTranslator(ollama)
 
+	// 步骤1: 开始分镜生成
+	updateStepStatus("script_generation", "processing", 0, "", "")
 	log.Printf("[AI] 开始分镜生成: task=%v", task.ID)
 	var req struct {
 		Novel string `json:"novel"`
@@ -294,6 +372,7 @@ Please output panel JSON array:`, req.Novel)
 		}
 	}
 	if err != nil {
+		updateStepStatus("script_generation", "failed", 0, "", err.Error())
 		task.Status = entity.TaskStatusFailed
 		task.Error = "分镜生成失败: " + err.Error()
 		task.UpdatedAt = time.Now()
@@ -334,7 +413,17 @@ Please output panel JSON array:`, req.Novel)
 			return fmt.Errorf("panel parse error: unable to extract valid panels from AI output")
 		}
 	}
-	log.Printf("[AI] 分镜解析完成: task=%v panels=%d", task.ID, len(panels))
+	// 提取人物信息
+	extractedCharacters := extractCharactersFromPanels(panels)
+
+	// 分镜生成完成，保存结果（包含人物信息）
+	scriptResult := map[string]interface{}{
+		"panels":     panels,
+		"characters": extractedCharacters,
+	}
+	scriptResultJSON, _ := json.Marshal(scriptResult)
+	updateStepStatus("script_generation", "completed", 100, string(scriptResultJSON), "")
+	log.Printf("[AI] 分镜解析完成: task=%v panels=%d characters=%d", task.ID, len(panels), len(extractedCharacters))
 
 	// panels内容清洗和自动翻译
 	for i, p := range panels {
@@ -421,71 +510,35 @@ Please output panel JSON array:`, req.Novel)
 		}
 	}
 
-	// 生成每格图片（SD）- 添加角色和场景一致性
-	images := make([]string, len(panels))
-	for i, panel := range panels {
-		log.Printf("[AI] 开始生成第%d格图片: %s", i+1, panel)
+	// 智能图片生成 - 优先使用内置引擎
+	updateStepStatus("image_generation", "processing", 0, "", "")
 
-		// 添加超时控制
-		imgCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancel()
+	var images []string
+	var err error
 
-		var img ImageResult
-		var err error
-
-		// 根据配置决定是否翻译提示词
-		finalPrompt := processPromptForSD(panel, characters, sceneContext)
-
-		log.Printf("[AI] 最终prompt: %s", finalPrompt[:min(100, len(finalPrompt))])
-
-		// 重试机制
-		maxRetries := 3
-		for retry := 1; retry <= maxRetries; retry++ {
-			img, err = sd.Txt2ImgWithConsistency(imgCtx, finalPrompt, characters, sceneContext)
-			if err == nil {
-				break
-			}
-			log.Printf("[AI] 第%d格图片生成失败，第%d次重试: %v", i+1, retry, err)
-
-			// 如果是422错误，尝试使用最简化的提示词
-			if strings.Contains(err.Error(), "422") && retry == 1 {
-				// 使用简化的基础提示词
-				simplePrompt := panel + ", high quality, detailed, professional illustration"
-				log.Printf("[AI] 尝试简化prompt: %s", simplePrompt)
-				img, err = sd.Txt2Img(simplePrompt, map[string]interface{}{
-					"width":        512,
-					"height":       768,
-					"steps":        20,
-					"cfg_scale":    7,
-					"sampler_name": "DPM++ 2M Karras",
-				})
-				if err == nil {
-					break
-				}
-			}
-
-			if retry < maxRetries {
-				time.Sleep(5 * time.Second)
-			}
-		}
-
-		if err != nil {
-			log.Printf("[AI] 第%d格图片生成最终失败: %v task=%v", i+1, err, task.ID)
-			// SD服务不可用时，创建占位符图片
-			log.Printf("[AI] SD服务不可用，使用占位符图片")
-			placeholderData := []byte("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9Ijc2OCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuWbvueJh+WNoOS9jeespuWbvjwvdGV4dD48L3N2Zz4=")
-			img = ImageResult{
-				Data: placeholderData,
-			}
-		}
-
-		images[i] = encodeBase64(img.Data)
-		task.Progress = 20 + int(float64(i+1)/float64(len(panels))*40)
-		_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
-		log.Printf("[AI] 第%d格图片生成完成: task=%v", i+1, task.ID)
+	if s.useBuiltinEngine && s.workflowManager != nil {
+		// 使用内置轻量级引擎
+		images, err = s.generateWithBuiltinEngine(ctx, panels, updateStepStatus, task, redisClient)
+	} else {
+		// 降级到SD WebUI
+		images, err = s.generateWithSDWebUI(ctx, panels, sd, characters, sceneContext, updateStepStatus, task, redisClient)
 	}
 
+	if err != nil {
+		updateStepStatus("image_generation", "failed", 0, "", err.Error())
+		task.Status = entity.TaskStatusFailed
+		task.Error = "图片生成失败: " + err.Error()
+		task.UpdatedAt = time.Now()
+		_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
+		return err
+	}
+
+	// 图片生成完成
+	imagesJSON, _ := json.Marshal(images)
+	updateStepStatus("image_generation", "completed", 100, string(imagesJSON), "")
+
 	// 4. 生成优化的旁白文本
+	updateStepStatus("voice_generation", "processing", 0, "", "")
 	log.Printf("[AI] 开始生成旁白文本: task=%v", task.ID)
 	narration, err := generateVoiceNarration(panels, ollama)
 	if err != nil {
@@ -542,6 +595,224 @@ Please output panel JSON array:`, req.Novel)
 	_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
 	log.Printf("[AI] 任务完成: task=%v", task.ID)
 	return nil
+}
+
+// generateWithBuiltinEngine 使用内置引擎生成图片
+func (s *Service) generateWithBuiltinEngine(
+	ctx context.Context,
+	panels []string,
+	updateStepStatus func(string, string, int, string, string),
+	task *entity.Task,
+	redisClient *redis.Client,
+) ([]string, error) {
+
+	log.Printf("[AI] 使用内置引擎生成 %d 张图片", len(panels))
+
+	// 根据面板数量选择最优策略
+	strategy := "balanced"
+	if len(panels) <= 3 {
+		strategy = "quality"
+	} else if len(panels) > 10 {
+		strategy = "speed"
+	}
+
+	// 创建工作流
+	workflow, err := s.workflowManager.CreateWorkflow(
+		fmt.Sprintf("Task_%s", task.ID),
+		strategy,
+		panels,
+		nil, // 使用默认配置
+	)
+	if err != nil {
+		return nil, fmt.Errorf("创建工作流失败: %v", err)
+	}
+
+	log.Printf("[AI] 创建工作流: %s (策略: %s)", workflow.ID, strategy)
+
+	// 执行工作流
+	err = s.workflowManager.ExecuteWorkflow(ctx, workflow.ID, func(progress float64, message string) {
+		progressInt := int(progress * 100)
+		updateStepStatus("image_generation", "processing", progressInt, "", message)
+		task.Progress = 20 + int(progress*40) // 图片生成占20-60%
+		task.UpdatedAt = time.Now()
+		_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("工作流执行失败: %v", err)
+	}
+
+	// 获取结果
+	finalWorkflow, err := s.workflowManager.GetWorkflowStatus(workflow.ID)
+	if err != nil {
+		return nil, fmt.Errorf("获取工作流结果失败: %v", err)
+	}
+
+	// 转换结果格式
+	images := make([]string, len(finalWorkflow.Results))
+	for i, imgBytes := range finalWorkflow.Results {
+		images[i] = encodeBase64(imgBytes)
+	}
+
+	log.Printf("[AI] 内置引擎生成完成: %d张图片", len(images))
+	return images, nil
+}
+
+// generateWithSDWebUI 使用SD WebUI生成图片 (降级方案)
+func (s *Service) generateWithSDWebUI(
+	ctx context.Context,
+	panels []string,
+	sd *SDClient,
+	characters []CharacterProfile,
+	sceneContext SceneContext,
+	updateStepStatus func(string, string, int, string, string),
+	task *entity.Task,
+	redisClient *redis.Client,
+) ([]string, error) {
+
+	log.Printf("[AI] 降级到SD WebUI生成 %d 张图片", len(panels))
+
+	// 检查SD服务状态
+	if err := sd.checkSDStatus(); err != nil {
+		log.Printf("[AI] SD服务状态警告: %v", err)
+		updateStepStatus("image_generation", "processing", 0, "", fmt.Sprintf("SD服务繁忙: %v", err))
+	}
+
+	// 创建高性能批处理器（针对16GB显存优化）
+	batchProcessor := NewBatchProcessor(
+		3,                    // 最大并发数（16GB显存可支持）
+		2,                    // 批次大小
+		15*time.Minute,       // 单张图片超时
+	)
+
+	// 批量生成图片
+	images, err := batchProcessor.BatchImageGeneration(
+		ctx,
+		panels,
+		sd,
+		characters,
+		sceneContext,
+		func(progress int, message string) {
+			updateStepStatus("image_generation", "processing", progress, "", message)
+			task.Progress = 20 + int(float64(progress)*0.4) // 图片生成占20-60%
+			task.UpdatedAt = time.Now()
+			_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return images, nil
+}
+
+// GetEngineStatus 获取引擎状态
+func (s *Service) GetEngineStatus() map[string]interface{} {
+	status := map[string]interface{}{
+		"builtin_engine_enabled": s.useBuiltinEngine,
+		"sd_webui_available":     s.sdClient != nil,
+	}
+
+	if s.useBuiltinEngine && s.inferenceEngine != nil {
+		status["builtin_engine"] = s.inferenceEngine.GetStatus()
+	}
+
+	if s.workflowManager != nil {
+		status["available_presets"] = s.workflowManager.GetAvailablePresets()
+	}
+
+	if s.modelManager != nil {
+		status["models"] = s.modelManager.GetAvailableModels()
+	}
+
+	return status
+}
+
+// SwitchEngine 切换引擎
+func (s *Service) SwitchEngine(useBuiltin bool) error {
+	if useBuiltin && (s.modelManager == nil || s.inferenceEngine == nil) {
+		return fmt.Errorf("内置引擎未初始化")
+	}
+
+	s.useBuiltinEngine = useBuiltin
+
+	if useBuiltin {
+		log.Printf("[AI] 切换到内置引擎")
+	} else {
+		log.Printf("[AI] 切换到SD WebUI")
+	}
+
+	return nil
+}
+
+// extractCharactersFromPanels 从分镜中提取人物信息
+func extractCharactersFromPanels(panels []string) []map[string]interface{} {
+	characterMap := make(map[string]int)
+	var characters []map[string]interface{}
+
+	// 常见人物关键词
+	characterKeywords := []string{
+		"主角", "男主", "女主", "主人公", "男人", "女人", "少年", "少女",
+		"老人", "孩子", "小孩", "婴儿", "青年", "中年", "长者",
+		"张", "李", "王", "刘", "陈", "杨", "赵", "黄", "周", "吴",
+		"徐", "孙", "胡", "朱", "高", "林", "何", "郭", "马", "罗",
+	}
+
+	for _, panel := range panels {
+		for _, keyword := range characterKeywords {
+			if strings.Contains(panel, keyword) {
+				characterMap[keyword]++
+			}
+		}
+	}
+
+	// 生成人物列表
+	for name, count := range characterMap {
+		if count >= 1 { // 至少出现1次
+			character := map[string]interface{}{
+				"name":        name,
+				"appearances": count,
+				"description": generateCharacterDescription(name),
+				"avatar":      generateCharacterAvatar(name),
+			}
+			characters = append(characters, character)
+		}
+	}
+
+	// 按出现次数排序
+	for i := 0; i < len(characters)-1; i++ {
+		for j := i + 1; j < len(characters); j++ {
+			if characters[i]["appearances"].(int) < characters[j]["appearances"].(int) {
+				characters[i], characters[j] = characters[j], characters[i]
+			}
+		}
+	}
+
+	return characters
+}
+
+// generateCharacterDescription 生成人物描述
+func generateCharacterDescription(name string) string {
+	descriptions := map[string]string{
+		"主角":  "故事的主要角色，推动情节发展的核心人物",
+		"男主":  "男性主角，故事的重要角色",
+		"女主":  "女性主角，故事的重要角色",
+		"主人公": "故事的中心人物，承载主要情节线",
+		"老人":  "年长的角色，通常具有智慧和经验",
+		"孩子":  "年幼的角色，代表纯真和希望",
+	}
+
+	if desc, exists := descriptions[name]; exists {
+		return desc
+	}
+	return "故事中的重要角色"
+}
+
+// generateCharacterAvatar 生成人物头像占位符
+func generateCharacterAvatar(name string) string {
+	// 返回一个简单的头像占位符URL或base64
+	return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMxODkwZmYiLz4KPHN2ZyB4PSI4IiB5PSI4IiB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+CjxwYXRoIGQ9Ik0xMiAxMkM5Ljc5IDEyIDggMTAuMjEgOCA4UzkuNzkgNCA1IDRTMTYgNS43OSAxNiA4UzE0LjIxIDEyIDEyIDEyWk0xMiAxNEM5LjMzIDE0IDQgMTUuMzQgNCAyMFYyMkgyMFYyMEMxNiAxNS4zNCAxNC42NyAxNCAxMiAxNFoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo8L3N2Zz4="
 }
 
 // splitLines 工具函数 - 按行分割字符串

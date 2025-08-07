@@ -16,6 +16,7 @@ type Config struct {
 	MinIO    MinIOConfig    `mapstructure:"minio"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	AI       AIConfig       `mapstructure:"ai"`
+	Security SecurityConfig `mapstructure:"security"`
 }
 
 // ServerConfig 服务器配置
@@ -82,6 +83,35 @@ type AIConfig struct {
 	// 工作流配置
 	MaxConcurrentTasks int
 	TaskTimeout        string
+}
+
+// SecurityConfig 安全配置
+type SecurityConfig struct {
+	// 密码策略
+	MinPasswordLength   int  `mapstructure:"min_password_length"`
+	RequireUppercase    bool `mapstructure:"require_uppercase"`
+	RequireLowercase    bool `mapstructure:"require_lowercase"`
+	RequireNumbers      bool `mapstructure:"require_numbers"`
+	RequireSpecialChars bool `mapstructure:"require_special_chars"`
+
+	// 账户安全
+	MaxLoginAttempts int    `mapstructure:"max_login_attempts"`
+	LockoutDuration  string `mapstructure:"lockout_duration"`
+	SessionTimeout   string `mapstructure:"session_timeout"`
+
+	// CORS配置
+	AllowedOrigins   []string `mapstructure:"allowed_origins"`
+	AllowedMethods   []string `mapstructure:"allowed_methods"`
+	AllowedHeaders   []string `mapstructure:"allowed_headers"`
+	AllowCredentials bool     `mapstructure:"allow_credentials"`
+
+	// 其他安全设置
+	EnableHTTPS      bool     `mapstructure:"enable_https"`
+	TrustedProxies   []string `mapstructure:"trusted_proxies"`
+	MaxRequestSize   int64    `mapstructure:"max_request_size"`
+	EnableRateLimit  bool     `mapstructure:"enable_rate_limit"`
+	RateLimitRequests int     `mapstructure:"rate_limit_requests"`
+	RateLimitWindow   string  `mapstructure:"rate_limit_window"`
 }
 
 // Load 加载配置

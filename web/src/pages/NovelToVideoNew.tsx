@@ -9,7 +9,7 @@ import RealTimeMonitor from '../components/RealTimeMonitor';
 const { Title, Paragraph } = Typography;
 const { TabPane } = Tabs;
 
-export default function NovelToVideo() {
+export default function NovelToVideoNew() {
   const [novel, setNovel] = useState('');
   const [taskId, setTaskId] = useState('');
   const [progress, setProgress] = useState(0);
@@ -31,10 +31,10 @@ export default function NovelToVideo() {
     setStatus('');
     setTaskSteps([]);
     setTaskError('');
-
+    
     try {
       const response = await aiApi.novelToAll(novel);
-      console.log('API Response:', response); // 调试日志
+      console.log('API Response:', response);
       if (response && response.task_id) {
         setTaskId(response.task_id);
         pollStatus(response.task_id);
@@ -44,7 +44,7 @@ export default function NovelToVideo() {
         message.error('任务提交失败: 未返回任务ID');
       }
     } catch (error: any) {
-      console.error('API Error:', error); // 调试日志
+      console.error('API Error:', error);
       setLoading(false);
       const errorMessage = error.response?.data?.message || error.message || '任务提交异常';
       message.error(`任务提交失败: ${errorMessage}`);
@@ -54,15 +54,14 @@ export default function NovelToVideo() {
   const handleSmartSubmit = async (content: string, enhancements: any) => {
     setNovel(content);
     console.log('智能增强配置:', enhancements);
-
-    // 使用增强配置提交任务
+    
     setLoading(true);
     setResult(null);
     setProgress(0);
     setStatus('');
     setTaskSteps([]);
     setTaskError('');
-
+    
     try {
       const response = await aiApi.novelToAll(content);
       if (response && response.task_id) {
@@ -84,28 +83,27 @@ export default function NovelToVideo() {
     timerRef.current = setInterval(async () => {
       try {
         const taskStatus = await taskApi.getTaskStatus(id);
-        console.log('Task Status:', taskStatus); // 调试日志
+        console.log('Task Status:', taskStatus);
         if (taskStatus) {
           setProgress(taskStatus.progress || 0);
           setStatus(taskStatus.status);
-
-          // 解析步骤信息
+          
           if (taskStatus.steps) {
             try {
-              const steps = typeof taskStatus.steps === 'string'
-                ? JSON.parse(taskStatus.steps)
+              const steps = typeof taskStatus.steps === 'string' 
+                ? JSON.parse(taskStatus.steps) 
                 : taskStatus.steps;
               setTaskSteps(steps);
             } catch (e) {
               console.error('解析步骤信息失败:', e);
             }
           }
-
+          
           if (taskStatus.status === 'completed') {
             setLoading(false);
             clearInterval(timerRef.current!);
             setResult(taskStatus.result ? JSON.parse(taskStatus.result) : null);
-            message.success('任务完成！');
+            message.success('🎉 任务完成！您的AI视频已生成完毕！');
           } else if (taskStatus.status === 'failed') {
             setLoading(false);
             clearInterval(timerRef.current!);
@@ -114,7 +112,7 @@ export default function NovelToVideo() {
           }
         }
       } catch (error: any) {
-        console.error('Poll Status Error:', error); // 调试日志
+        console.error('Poll Status Error:', error);
         setLoading(false);
         clearInterval(timerRef.current!);
         message.error('进度查询失败');
@@ -129,57 +127,85 @@ export default function NovelToVideo() {
   }, []);
 
   return (
-    <Card style={{ maxWidth: 800, margin: '32px auto' }}>
-      <Title level={3}>小说一键生成漫画、推文、动漫视频</Title>
-      <Paragraph>粘贴你的小说内容，点击“一键生成”，AI将自动生成分镜、漫画图片、推文、配音和动漫视频。</Paragraph>
-      <Input.TextArea
-        rows={8}
-        value={novel}
-        onChange={e => setNovel(e.target.value)}
-        placeholder="请输入小说内容..."
-        disabled={loading}
-        style={{ marginBottom: 16 }}
-      />
-      <Button type="primary" onClick={handleSubmit} loading={loading} style={{ marginBottom: 16 }}>
-        一键生成
-      </Button>
-      {(loading || taskId) && (
-        <TaskProgress
-          taskId={taskId}
-          status={status}
-          progress={progress}
-          steps={taskSteps}
-          result={result}
-          error={taskError}
-        />
-      )}
-      {result && (
-        <div style={{ marginTop: 24 }}>
-          <Title level={4}>生成结果</Title>
-          {result.images && result.images.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-              {result.images.map((img: string, idx: number) => (
-                <img key={idx} src={`data:image/png;base64,${img}`} alt={`panel-${idx+1}`} style={{ width: 120, borderRadius: 4 }} />
-              ))}
-            </div>
-          )}
-          {result.panels && (
-            <div style={{ marginBottom: 16 }}>
-              <Title level={5}>分镜脚本</Title>
-              <ol>
-                {result.panels.map((p: string, idx: number) => <li key={idx}>{p}</li>)}
-              </ol>
-            </div>
-          )}
-          {result.url && (
-            <div style={{ marginBottom: 16 }}>
-              <Title level={5}>动漫视频</Title>
-              <video src={result.url} controls style={{ width: 400, borderRadius: 4 }} />
-              <div><a href={result.url} download>下载视频</a></div>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
+    <div style={{ padding: '20px', minHeight: '100vh', background: '#f5f5f5' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        {/* 顶部标题 */}
+        <Card style={{ marginBottom: 24, textAlign: 'center' }}>
+          <Title level={1} style={{ 
+            margin: 0, 
+            background: 'linear-gradient(45deg, #667eea, #764ba2)', 
+            WebkitBackgroundClip: 'text', 
+            WebkitTextFillColor: 'transparent' 
+          }}>
+            🎬 VidCraft Studio Pro
+          </Title>
+          <Paragraph style={{ fontSize: 16, color: '#666', margin: '8px 0 0 0' }}>
+            行业领先的AI视频生成平台 · 智能创作 · 实时监控 · 专业品质
+          </Paragraph>
+        </Card>
+
+        {/* 主要功能区域 */}
+        <Tabs defaultActiveKey="smart" size="large">
+          <TabPane 
+            tab={
+              <span>
+                <RobotOutlined />
+                智能创作
+              </span>
+            } 
+            key="smart"
+          >
+            <SmartCreationAssistant 
+              onSubmit={handleSmartSubmit}
+              loading={loading}
+            />
+            
+            {(loading || taskId) && (
+              <div style={{ marginTop: 24 }}>
+                <TaskProgress
+                  taskId={taskId}
+                  status={status}
+                  progress={progress}
+                  steps={taskSteps}
+                  result={result}
+                  error={taskError}
+                />
+              </div>
+            )}
+          </TabPane>
+
+          <TabPane 
+            tab={
+              <span>
+                <MonitorOutlined />
+                实时监控
+              </span>
+            } 
+            key="monitor"
+          >
+            <RealTimeMonitor />
+          </TabPane>
+
+          <TabPane 
+            tab={
+              <span>
+                <HistoryOutlined />
+                历史记录
+              </span>
+            } 
+            key="history"
+          >
+            <Card>
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <Title level={3}>历史记录</Title>
+                <Paragraph type="secondary">
+                  这里将显示您的创作历史和作品管理功能
+                </Paragraph>
+              </div>
+            </Card>
+          </TabPane>
+        </Tabs>
+      </div>
+    </div>
   );
-} 
+}

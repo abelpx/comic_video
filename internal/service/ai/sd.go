@@ -118,8 +118,41 @@ func (s *SDClient) processPrompt(prompt string) string {
 	return prompt
 }
 
+// checkSDStatus 检查SD服务状态
+func (s *SDClient) checkSDStatus() error {
+	resp, err := http.Get(s.Endpoint + "/sdapi/v1/progress")
+	if err != nil {
+		return fmt.Errorf("无法连接SD服务: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var progress struct {
+		Progress float64 `json:"progress"`
+		ETA      float64 `json:"eta_relative"`
+		State    struct {
+			JobCount int `json:"job_count"`
+		} `json:"state"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&progress); err != nil {
+		return fmt.Errorf("解析SD状态失败: %v", err)
+	}
+
+	// 如果有任务在队列中且预计时间过长，返回错误
+	if progress.State.JobCount > 0 && progress.ETA > 300 { // 5分钟
+		return fmt.Errorf("SD服务繁忙，预计等待时间: %.0f秒", progress.ETA)
+	}
+
+	return nil
+}
+
 // attemptGeneration 尝试生成图像
 func (s *SDClient) attemptGeneration(ctx context.Context, prompt string, opts map[string]interface{}) (ImageResult, error) {
+	// 检查SD服务状态
+	if err := s.checkSDStatus(); err != nil {
+		log.Printf("[SD] 服务状态检查失败: %v", err)
+		// 不直接返回错误，而是继续尝试，但记录警告
+	}
 	// 组装请求体
 	body := map[string]interface{}{
 		"prompt": prompt,
@@ -196,15 +229,19 @@ func (s *SDClient) Txt2ImgWithConsistency(ctx context.Context, prompt string, ch
 	// 计算一致性种子
 	seed := calculateConsistencySeed(characters, sceneContext)
 
-	// 组装请求体，添加一致性参数（移除不支持的参数）
+	// 组装请求体，优化显存使用
 	body := map[string]interface{}{
 		"prompt":       prompt,
 		"seed":         seed,
-		"width":        512,
-		"height":       768,
-		"steps":        20,
+		"width":        512,  // 保持较小分辨率
+		"height":       512,  // 改为正方形，减少显存
+		"steps":        15,   // 减少采样步数
 		"cfg_scale":    7,
 		"sampler_name": "DPM++ 2M Karras",
+		"batch_size":   1,    // 确保批次大小为1
+		"n_iter":       1,    // 确保只生成1张图
+		"restore_faces": false, // 关闭面部修复节省显存
+		"tiling":       false,  // 关闭平铺
 	}
 
 	b, _ := json.Marshal(body)
@@ -291,9 +328,12 @@ func decodeBase64Image(b64 string) ([]byte, error) {
 // GenerateImage 生成图像（为新的AI服务提供的包装方法）
 func (s *SDClient) GenerateImage(prompt string, seed int64) ([]byte, error) {
 	opts := map[string]interface{}{
-		"width":  512,
-		"height": 512,
-		"steps":  20,
+		"width":        512,
+		"height":       512,
+		"steps":        15,  // 减少步数
+		"batch_size":   1,   // 确保批次为1
+		"cfg_scale":    7,
+		"sampler_name": "DPM++ 2M Karras",
 	}
 
 	if seed > 0 {

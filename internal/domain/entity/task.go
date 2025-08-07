@@ -35,6 +35,19 @@ type Task struct {
 	Params    string    `json:"params" gorm:"type:text"`    // 任务参数（JSON字符串）
 	Result    string    `json:"result" gorm:"type:text"`    // 任务结果（JSON字符串）
 	Error     string    `json:"error" gorm:"type:text"`     // 错误信息
+	Steps     string    `json:"steps" gorm:"type:text"`     // 步骤详情（JSON字符串）
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TaskStep 任务步骤
+type TaskStep struct {
+	Name        string    `json:"name"`
+	Status      string    `json:"status"` // pending, processing, completed, failed
+	Progress    int       `json:"progress"`
+	StartTime   time.Time `json:"start_time,omitempty"`
+	EndTime     time.Time `json:"end_time,omitempty"`
+	Result      string    `json:"result,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	Description string    `json:"description,omitempty"`
 }

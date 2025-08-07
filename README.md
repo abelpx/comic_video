@@ -1,10 +1,10 @@
-# VidCraft Studio - AI视频创作平台
+# Comic Video - AI视频创作平台
 
 ## 🎉 项目状态
 
 **✅ 系统已成功部署并运行！**
 
-VidCraft Studio是一个基于AI的视频创作平台，支持小说转视频、图像生成等功能。
+Comic Video 是一个基于AI的视频创作平台，支持小说转视频、图像生成等功能。
 
 ## 🚀 快速开始
 

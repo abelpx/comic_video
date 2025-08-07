@@ -22,6 +22,7 @@ import (
 	"comic_video/internal/service/tweet"
 	"comic_video/internal/service/video"
 	"comic_video/internal/service/voice"
+	"comic_video/internal/utils"
 )
 
 // EnhancedWorkflowService 增强的工作流服务
@@ -215,7 +216,10 @@ func (s *EnhancedWorkflowService) stepGenerateScript(ctx context.Context, req *C
 		Style:     req.Style,
 	}
 
-	script, err := s.scriptService.AdaptNovelToScript(ctx, scriptReq)
+	// 使用重试机制生成剧本
+	script, err := utils.RetryWithResultFunc(ctx, nil, func() (*entity.Script, error) {
+		return s.scriptService.AdaptNovelToScript(ctx, scriptReq)
+	})
 	if err != nil {
 		return fmt.Errorf("生成剧本失败: %w", err)
 	}

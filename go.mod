@@ -12,6 +12,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.61
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/spf13/viper v1.16.0
+	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.17.0
 	gorm.io/driver/postgres v1.5.9
 	gorm.io/gorm v1.25.12

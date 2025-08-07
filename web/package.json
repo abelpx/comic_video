@@ -11,27 +11,29 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "@ant-design/icons": "^5.2.5",
     "antd": "^5.13.0",
     "axios": "^1.6.7",
-    "react-router-dom": "^6.22.3",
-    "@ant-design/icons": "^5.2.5",
-    "zustand": "^4.4.7",
-    "framer-motion": "^10.16.16",
-    "recharts": "^2.8.0",
-    "react-helmet-async": "^2.0.4",
-    "dayjs": "^1.11.10",
+    "chart.js": "^4.5.0",
     "classnames": "^2.3.2",
-    "react-hot-toast": "^2.4.1"
+    "dayjs": "^1.11.10",
+    "framer-motion": "^10.18.0",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^18.2.0",
+    "react-helmet-async": "^2.0.4",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.22.3",
+    "recharts": "^2.8.0",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.14",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^5.4.5",
-    "vite": "^4.4.9",
     "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.33.2"
+    "eslint-plugin-react": "^7.33.2",
+    "typescript": "^5.4.5",
+    "vite": "^4.4.9"
   }
-} 
+}

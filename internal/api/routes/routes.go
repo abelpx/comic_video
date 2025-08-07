@@ -150,6 +150,17 @@ func SetupRoutes(
 		ai.GET("/usage-stats", aiHandler.GetUsageStats) // 获取使用统计
 	}
 
+	// 系统监控路由
+	system := v1.Group("/system")
+	{
+		system.GET("/metrics", handlers.GetSystemMetrics)
+		system.GET("/gpu", handlers.GetGPUStatus)
+		system.GET("/stream", handlers.StreamSystemMetrics)
+		system.GET("/engine", handlers.GetEngineStatus)
+		system.POST("/engine/switch", handlers.SwitchEngine)
+		system.GET("/models", handlers.GetModelList)
+	}
+
 	// TTS 相关路由
 	ttsHandler := handlers.NewTTSHandler(aiService.GetTTSClient())
 	tts := v1.Group("/tts")

@@ -1,0 +1,467 @@
+openapi: 3.0.3
+info:
+  title: Comic Video API
+  description: |
+    Comic Video是一个基于AI的视频创作平台API文档。
+    
+    ## 认证方式
+    API使用JWT Bearer Token进行认证。在请求头中添加：
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
+    
+    ## 错误处理
+    API使用统一的错误响应格式：
+    ```json
+    {
+      "success": false,
+      "code": 1001,
+      "message": "错误信息",
+      "details": "详细错误描述",
+      "timestamp": "2025-01-07T10:00:00Z",
+      "request_id": "uuid"
+    }
+    ```
+    
+    ## 限流
+    API实施了限流策略：
+    - 普通用户：100请求/分钟
+    - 高级用户：1000请求/分钟
+    - AI接口：10请求/分钟
+    
+  version: 1.0.0
+  contact:
+    name: Comic Video Team
+    email: support@comicvideo.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: 开发环境
+  - url: https://api.comicvideo.com/v1
+    description: 生产环境
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        email:
+          type: string
+          format: email
+          description: 邮箱
+        nickname:
+          type: string
+          description: 昵称
+        avatar:
+          type: string
+          description: 头像URL
+        role:
+          type: string
+          enum: [user, admin, premium]
+          description: 用户角色
+        status:
+          type: string
+          enum: [active, inactive, banned]
+          description: 用户状态
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 项目ID
+        name:
+          type: string
+          description: 项目名称
+        description:
+          type: string
+          description: 项目描述
+        type:
+          type: string
+          enum: [video, comic, novel, tweet]
+          description: 项目类型
+        status:
+          type: string
+          enum: [draft, processing, completed, failed]
+          description: 项目状态
+        user_id:
+          type: string
+          format: uuid
+          description: 用户ID
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 任务ID
+        type:
+          type: string
+          enum: [novel_to_video, generate_novel, generate_tweet]
+          description: 任务类型
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+          description: 任务状态
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 任务进度
+        result:
+          type: object
+          description: 任务结果
+        error:
+          type: string
+          description: 错误信息
+        user_id:
+          type: string
+          format: uuid
+          description: 用户ID
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 请求是否成功
+        code:
+          type: integer
+          description: 响应码
+        message:
+          type: string
+          description: 响应消息
+        data:
+          type: object
+          description: 响应数据
+        timestamp:
+          type: string
+          format: date-time
+          description: 响应时间
+        request_id:
+          type: string
+          description: 请求ID
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: integer
+          description: 错误码
+        message:
+          type: string
+          description: 错误消息
+        details:
+          type: string
+          description: 错误详情
+        timestamp:
+          type: string
+          format: date-time
+          description: 错误时间
+        request_id:
+          type: string
+          description: 请求ID
+        path:
+          type: string
+          description: 请求路径
+
+    PaginationResult:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+          description: 数据列表
+        total:
+          type: integer
+          description: 总记录数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页大小
+        total_pages:
+          type: integer
+          description: 总页数
+        has_next:
+          type: boolean
+          description: 是否有下一页
+        has_prev:
+          type: boolean
+          description: 是否有上一页
+
+  responses:
+    UnauthorizedError:
+      description: 未授权
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: 1002
+            message: "Unauthorized"
+            timestamp: "2025-01-07T10:00:00Z"
+
+    ForbiddenError:
+      description: 禁止访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: 1003
+            message: "Forbidden"
+            timestamp: "2025-01-07T10:00:00Z"
+
+    NotFoundError:
+      description: 资源未找到
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: 1004
+            message: "Resource not found"
+            timestamp: "2025-01-07T10:00:00Z"
+
+    ValidationError:
+      description: 参数验证错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: 1001
+            message: "Invalid parameters"
+            details: "Username is required"
+            timestamp: "2025-01-07T10:00:00Z"
+
+    RateLimitError:
+      description: 请求频率限制
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: 1006
+            message: "Too many requests"
+            timestamp: "2025-01-07T10:00:00Z"
+      headers:
+        X-RateLimit-Limit:
+          description: 限流阈值
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: 剩余请求数
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: 限流重置时间
+          schema:
+            type: integer
+
+    InternalServerError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: 1000
+            message: "Internal server error"
+            timestamp: "2025-01-07T10:00:00Z"
+
+paths:
+  /health:
+    get:
+      tags:
+        - System
+      summary: 健康检查
+      description: 检查API服务健康状态
+      security: []
+      responses:
+        '200':
+          description: 服务健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: string
+                    example: "24h30m15s"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: "healthy"
+                          latency:
+                            type: string
+                            example: "2ms"
+                      redis:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: "healthy"
+                          latency:
+                            type: string
+                            example: "1ms"
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: 用户注册
+      description: 注册新用户账户
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 20
+                  pattern: '^[a-zA-Z0-9_-]+$'
+                  description: 用户名（3-20位，只能包含字母、数字、下划线、连字符）
+                email:
+                  type: string
+                  format: email
+                  description: 邮箱地址
+                password:
+                  type: string
+                  minLength: 8
+                  description: 密码（至少8位）
+                nickname:
+                  type: string
+                  maxLength: 50
+                  description: 昵称（可选）
+            example:
+              username: "testuser"
+              email: "test@example.com"
+              password: "password123"
+              nickname: "Test User"
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          token:
+                            type: string
+                            description: JWT访问令牌
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: 用户已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: 2002
+                message: "User already exists"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+tags:
+  - name: System
+    description: 系统相关接口
+  - name: Authentication
+    description: 认证相关接口
+  - name: Users
+    description: 用户管理接口
+  - name: Projects
+    description: 项目管理接口
+  - name: AI
+    description: AI服务接口
+  - name: Tasks
+    description: 任务管理接口
+  - name: Files
+    description: 文件管理接口
