@@ -74,8 +74,8 @@ func (c *Client) Incr(ctx context.Context, key string) error {
 }
 
 // IncrBy 按指定值递增
-func (c *Client) IncrBy(ctx context.Context, key string, value int64) error {
-	return c.client.IncrBy(ctx, key, value).Err()
+func (c *Client) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
+	return c.client.IncrBy(ctx, key, value).Result()
 }
 
 // ExpireAt 设置过期时间
@@ -152,7 +152,37 @@ func (c *Client) GetTaskStatus(ctx context.Context, taskID string) (*entity.Task
 	return &task, nil
 }
 
+// SetNX 设置键值对（仅当键不存在时）
+func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	return c.client.SetNX(ctx, key, value, expiration).Result()
+}
+
+// MGet 批量获取值
+func (c *Client) MGet(ctx context.Context, keys ...string) ([]interface{}, error) {
+	return c.client.MGet(ctx, keys...).Result()
+}
+
+// Pipeline 创建管道
+func (c *Client) Pipeline() redis.Pipeliner {
+	return c.client.Pipeline()
+}
+
+// Keys 获取匹配的键
+func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
+	return c.client.Keys(ctx, pattern).Result()
+}
+
+// Info 获取服务器信息
+func (c *Client) Info(ctx context.Context, section ...string) (string, error) {
+	return c.client.Info(ctx, section...).Result()
+}
+
+// Eval 执行Lua脚本
+func (c *Client) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
+	return c.client.Eval(ctx, script, keys, args...).Result()
+}
+
 // Close 关闭连接
 func (c *Client) Close() error {
 	return c.client.Close()
-} 
+}

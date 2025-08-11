@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"comic_video/internal/domain/entity"
-	"comic_video/internal/utils"
 	"github.com/google/uuid"
 )
 

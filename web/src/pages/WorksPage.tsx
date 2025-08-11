@@ -12,9 +12,12 @@ import {
   PictureOutlined,
   VideoCameraOutlined,
   BookOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { useTasks } from '../store';
 import { taskApi, projectApi } from '../services/api';
+import useTaskManager from '../hooks/useTaskManager';
+import TaskDebugger from '../components/TaskDebugger';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -46,6 +49,12 @@ const WorksPage: React.FC = () => {
     dateRange: null as any,
   });
 
+  // 使用任务管理器
+  const { refreshTasks } = useTaskManager({
+    autoLoad: false, // 在WorksPage中手动控制加载
+    enablePolling: true,
+  });
+
   // 作品类型配置
   const workTypes = {
     video: { name: '视频', icon: <VideoCameraOutlined />, color: '#0ea5e9' },
@@ -55,24 +64,35 @@ const WorksPage: React.FC = () => {
   };
 
   useEffect(() => {
+    // 使用任务管理器加载任务，而不是直接调用loadWorks
     loadWorks();
   }, []);
+
+  // 当组件挂载时，确保任务管理器已经加载了最新数据
+  useEffect(() => {
+    if (tasks.length === 0) {
+      // 如果没有任务数据，触发一次刷新
+      refreshTasks();
+    }
+  }, [tasks.length, refreshTasks]);
 
   const loadWorks = async () => {
     try {
       setLoading(true);
-      // 加载用户任务作为作品
-      const tasksData = await taskApi.getUserTasks(1, 50);
-      const worksData = tasksData.tasks?.map((task: any) => ({
+      // 使用任务管理器刷新任务
+      await refreshTasks();
+
+      // 从store中获取任务并转换为作品数据
+      const worksData = tasks.map((task: any) => ({
         id: task.id,
         title: task.title || `${getWorkTypeName(task.type)}作品`,
         type: mapTaskTypeToWorkType(task.type),
         status: task.status,
-        createdAt: task.created_at,
+        createdAt: task.created_at || task.createdAt,
         result: task.result,
         progress: task.progress,
-      })) || [];
-      
+      }));
+
       setWorks(worksData);
     } catch (error) {
       console.error('加载作品失败:', error);
@@ -80,6 +100,20 @@ const WorksPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // 当tasks变化时更新works
+  useEffect(() => {
+    const worksData = tasks.map((task: any) => ({
+      id: task.id,
+      title: task.title || `${getWorkTypeName(task.type)}作品`,
+      type: mapTaskTypeToWorkType(task.type),
+      status: task.status,
+      createdAt: task.created_at || task.createdAt,
+      result: task.result,
+      progress: task.progress,
+    }));
+    setWorks(worksData);
+  }, [tasks]);
 
   const getWorkTypeName = (type: string) => {
     const typeMap: Record<string, string> = {
@@ -135,7 +169,7 @@ const WorksPage: React.FC = () => {
         try {
           // TODO: 实现删除功能
           console.log('删除作品:', work.id);
-          await loadWorks(); // 重新加载列表
+          await refreshTasks(); // 使用任务管理器刷新
         } catch (error) {
           console.error('删除失败:', error);
         }
@@ -247,6 +281,9 @@ const WorksPage: React.FC = () => {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* 调试组件 */}
+      <TaskDebugger />
+
       {/* 页面标题 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -254,12 +291,24 @@ const WorksPage: React.FC = () => {
         transition={{ duration: 0.5 }}
         style={{ marginBottom: 32 }}
       >
-        <Title level={2} style={{ marginBottom: 8 }}>
-          我的作品
-        </Title>
-        <Text type="secondary" style={{ fontSize: 16 }}>
-          管理您创作的所有作品，包括视频、漫画、小说等内容。
-        </Text>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <Title level={2} style={{ marginBottom: 8 }}>
+              我的作品
+            </Title>
+            <Text type="secondary" style={{ fontSize: 16 }}>
+              管理您创作的所有作品，包括视频、漫画、小说等内容。
+            </Text>
+          </div>
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={loadWorks}
+            loading={loading}
+          >
+            刷新
+          </Button>
+        </div>
       </motion.div>
 
       {/* 筛选器 */}

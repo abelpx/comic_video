@@ -63,7 +63,7 @@ func (q *QuotaManager) ConsumeQuota(ctx context.Context, userID string, quotaTyp
 	// TODO: 可以考虑使用Lua脚本实现原子操作
 
 	// 增加使用量
-	err := q.redis.IncrBy(ctx, key, amount)
+	_, err := q.redis.IncrBy(ctx, key, amount)
 	if err != nil {
 		return fmt.Errorf("配额消费失败: %v", err)
 	}

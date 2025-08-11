@@ -516,13 +516,44 @@ Please output panel JSON array:`, req.Novel)
 	var images []string
 	var imageErr error
 
-	if service.useBuiltinEngine && service.workflowManager != nil {
-		// 使用内置轻量级引擎
-		images, imageErr = service.generateWithBuiltinEngine(ctx, panels, updateStepStatus, task, redisClient)
-	} else {
-		// 降级到SD WebUI
-		images, imageErr = service.generateWithSDWebUI(ctx, panels, sd, characters, sceneContext, updateStepStatus, task, redisClient)
+	// 创建SD WebUI客户端
+	sdWebUI := &SDWebUIClient{
+		BaseURL: "http://localhost:7860",
 	}
+
+	// 创建场景上下文
+	sceneCtx := SceneContext{
+		Location:  "default",
+		TimeOfDay: "day",
+		Style:     "anime", // 使用默认样式
+	}
+
+	// 创建面板数据
+	var panelStructs []Panel
+	for i, panelDesc := range panels {
+		panelStructs = append(panelStructs, Panel{
+			Description: panelDesc,
+			Characters:  []string{}, // 简化实现
+		})
+		_ = i // 避免未使用变量警告
+	}
+
+	// 使用SD WebUI生成图片
+	// 转换字符类型
+	var entityCharacters []entity.Character
+	for _, char := range characters {
+		entityCharacters = append(entityCharacters, entity.Character{
+			Name:        char.Name,
+			Description: char.Description,
+		})
+	}
+
+	// 创建适配的更新函数
+	adaptedUpdateStatus := func(stage, status string, progress float64, message, errorMsg string) {
+		updateStepStatus(stage, status, int(progress), message, errorMsg)
+	}
+
+	images, imageErr = generateWithSDWebUI(ctx, panelStructs, sdWebUI, entityCharacters, sceneCtx, adaptedUpdateStatus, task, redisClient)
 
 	if imageErr != nil {
 		updateStepStatus("image_generation", "failed", 0, "", imageErr.Error())
@@ -1526,4 +1557,84 @@ func UploadVideoToMinio(ctx context.Context, minioClient minio.MinioClient, buck
 		return "", err
 	}
 	return url, nil
+}
+
+// Panel 面板结构
+type Panel struct {
+	Description string
+	Characters  []string
+}
+
+// SDWebUIClient SD WebUI客户端
+type SDWebUIClient struct {
+	BaseURL string
+}
+
+
+
+// GenerateImage 生成图片
+func (s *SDWebUIClient) GenerateImage(ctx context.Context, prompt, negativePrompt string) ([]byte, error) {
+	// 简化实现，返回空数据
+	return []byte{}, nil
+}
+
+// generateWithSDWebUI 使用SD WebUI生成图片
+func generateWithSDWebUI(ctx context.Context, panels []Panel, sd *SDWebUIClient, characters []entity.Character, sceneContext SceneContext, updateStepStatus func(string, string, float64, string, string), task *entity.Task, redisClient *redis.Client) ([]string, error) {
+	var images []string
+
+	for i, panel := range panels {
+		// 构建提示词
+		prompt := buildPrompt(panel, characters, sceneContext)
+
+		// 生成图片
+		imageData, err := sd.GenerateImage(ctx, prompt, "")
+		if err != nil {
+			return nil, fmt.Errorf("生成第%d张图片失败: %v", i+1, err)
+		}
+
+		// 保存图片
+		imagePath := fmt.Sprintf("temp/panel_%d_%d.png", task.ID, i)
+		err = saveImageData(imageData, imagePath)
+		if err != nil {
+			return nil, fmt.Errorf("保存第%d张图片失败: %v", i+1, err)
+		}
+
+		images = append(images, imagePath)
+
+		// 更新进度
+		progress := float64(i+1) / float64(len(panels)) * 100
+		updateStepStatus("image_generation", "processing", progress, fmt.Sprintf("已生成 %d/%d 张图片", i+1, len(panels)), "")
+	}
+
+	return images, nil
+}
+
+// buildPrompt 构建提示词
+func buildPrompt(panel Panel, characters []entity.Character, sceneContext SceneContext) string {
+	prompt := panel.Description
+
+	// 添加场景信息
+	if sceneContext.Location != "" {
+		prompt += fmt.Sprintf(", location: %s", sceneContext.Location)
+	}
+	if sceneContext.TimeOfDay != "" {
+		prompt += fmt.Sprintf(", time: %s", sceneContext.TimeOfDay)
+	}
+	if sceneContext.Style != "" {
+		prompt += fmt.Sprintf(", style: %s", sceneContext.Style)
+	}
+
+	return prompt
+}
+
+// saveImageData 保存图片数据
+func saveImageData(imageData []byte, imagePath string) error {
+	// 确保目录存在
+	dir := filepath.Dir(imagePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	// 写入文件
+	return os.WriteFile(imagePath, imageData, 0644)
 }

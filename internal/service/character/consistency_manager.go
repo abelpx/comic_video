@@ -3,7 +3,6 @@ package character
 import (
 	"context"
 	"crypto/md5"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -157,8 +156,24 @@ func (cm *ConsistencyManager) buildBasePrompt(character *entity.Character) strin
 	}
 
 	// 外观描述
-	if character.Appearance != "" {
-		promptParts = append(promptParts, character.Appearance)
+	appearanceDesc := ""
+	if character.FacialFeatures != "" {
+		appearanceDesc += character.FacialFeatures
+	}
+	if character.HairStyle != "" {
+		if appearanceDesc != "" {
+			appearanceDesc += ", "
+		}
+		appearanceDesc += character.HairStyle
+	}
+	if character.Clothing != "" {
+		if appearanceDesc != "" {
+			appearanceDesc += ", "
+		}
+		appearanceDesc += character.Clothing
+	}
+	if appearanceDesc != "" {
+		promptParts = append(promptParts, appearanceDesc)
 	}
 
 	// 添加质量修饰符
@@ -185,8 +200,9 @@ func (cm *ConsistencyManager) extractVisualKeywords(character *entity.Character)
 	}
 
 	// 从外观中提取关键词
-	if character.Appearance != "" {
-		keywords = append(keywords, cm.extractKeywordsFromText(character.Appearance)...)
+	appearanceText := character.FacialFeatures + " " + character.HairStyle + " " + character.Clothing
+	if appearanceText != "  " { // 检查不是空字符串
+		keywords = append(keywords, cm.extractKeywordsFromText(appearanceText)...)
 	}
 
 	// 添加默认关键词

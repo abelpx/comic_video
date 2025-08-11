@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -229,8 +228,8 @@ func SlidingWindowRateLimitMiddleware(redisClient *redis.Client, requests int, w
 			end
 		`
 		
-		result, err := redisClient.Eval(c.Request.Context(), luaScript, []string{key}, 
-			int64(window.Seconds()), requests, now).Result()
+		result, err := redisClient.Eval(c.Request.Context(), luaScript, []string{key},
+			int64(window.Seconds()), requests, now)
 		
 		if err != nil {
 			utils.LogError(c.Request.Context(), err, "Failed to execute sliding window rate limit", map[string]interface{}{

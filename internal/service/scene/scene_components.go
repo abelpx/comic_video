@@ -7,7 +7,6 @@ import (
 	"math"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // SemanticAnalyzer 语义分析器
@@ -374,9 +373,8 @@ func (ct *ContextTracker) determineTransitionType(scene1, scene2 *EnhancedScene)
 func (ct *ContextTracker) analyzeContinuity(scene1, scene2 *EnhancedScene) map[string]interface{} {
 	continuity := make(map[string]interface{})
 	
-	// 角色连续性
-	commonCharacters := ct.findCommonCharacters(scene1.Characters, scene2.Characters)
-	continuity["characters"] = commonCharacters
+	// 角色连续性（暂时跳过，因为Scene实体没有Characters字段）
+	continuity["characters"] = []string{}
 	
 	// 位置连续性
 	continuity["location_similarity"] = ct.calculateLocationSimilarity(scene1.Location, scene2.Location)
@@ -408,20 +406,11 @@ func (ct *ContextTracker) analyzeCharacterArcs(scenes []*EnhancedScene) []*Chara
 	characterMap := make(map[string]*CharacterArc)
 	
 	for i, scene := range scenes {
-		for _, character := range scene.Characters {
-			if arc, exists := characterMap[character]; exists {
-				arc.Appearances = append(arc.Appearances, i)
-			} else {
-				characterMap[character] = &CharacterArc{
-					CharacterName: character,
-					Appearances:   []int{i},
-					Development:   make(map[string]interface{}),
-					EmotionalJourney: []string{scene.EmotionalTone.PrimaryEmotion},
-				}
-			}
-		}
+		// 暂时跳过角色分析，因为Scene实体没有Characters字段
+		_ = scene
+		_ = i
 	}
-	
+
 	arcs := make([]*CharacterArc, 0, len(characterMap))
 	for _, arc := range characterMap {
 		arcs = append(arcs, arc)

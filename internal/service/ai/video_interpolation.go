@@ -242,20 +242,20 @@ func (vi *VideoInterpolator) OptimizeForAnimation(
 ) (*InterpolationResult, error) {
 	
 	quality := "balanced"
-	_ = 0.6 // smoothFactor 暂时不使用
-	
+
 	switch animationType {
 	case "smooth":
 		quality = "high"
-		smoothFactor = 0.9
-		targetFPS = min(targetFPS, 30) // 平滑动画不需要太高帧率
+		if targetFPS > 30 {
+			targetFPS = 30 // 平滑动画不需要太高帧率
+		}
 	case "dramatic":
 		quality = "balanced"
-		smoothFactor = 0.7
-		targetFPS = min(targetFPS, 24) // 电影感帧率
+		if targetFPS > 24 {
+			targetFPS = 24 // 电影感帧率
+		}
 	case "action":
 		quality = "fast"
-		smoothFactor = 0.4
 		targetFPS = min(targetFPS, 60) // 高帧率动作
 	}
 	

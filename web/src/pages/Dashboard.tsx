@@ -12,9 +12,11 @@ import {
   ClockCircleOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { useUser, useTasks, useQuotas } from '../store';
-import { aiApi, taskApi } from '../services/api';
+import { aiApi } from '../services/api';
+import useTaskManager from '../hooks/useTaskManager';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -25,6 +27,12 @@ const Dashboard: React.FC = () => {
   const quotas = useQuotas();
   const [loading, setLoading] = useState(true);
   const [recentTasks, setRecentTasks] = useState<any[]>([]);
+
+  // 使用任务管理器
+  const { refreshTasks } = useTaskManager({
+    autoLoad: false, // 在Dashboard中手动控制加载
+    enablePolling: true,
+  });
 
   // 快捷工具配置
   const quickTools = [
@@ -63,10 +71,12 @@ const Dashboard: React.FC = () => {
       try {
         // 加载用户配额
         await aiApi.getUserQuota();
-        
-        // 加载最近任务
-        const tasksData = await taskApi.getUserTasks(1, 10);
-        setRecentTasks(tasksData.tasks || []);
+
+        // 使用任务管理器刷新任务
+        await refreshTasks();
+
+        // 从store中获取最新任务作为最近任务
+        setRecentTasks(tasks.slice(0, 10));
       } catch (error) {
         console.error('加载数据失败:', error);
       } finally {
@@ -75,7 +85,12 @@ const Dashboard: React.FC = () => {
     };
 
     loadData();
-  }, []);
+  }, [refreshTasks]);
+
+  // 当tasks变化时更新recentTasks
+  useEffect(() => {
+    setRecentTasks(tasks.slice(0, 10));
+  }, [tasks]);
 
   // 获取任务状态图标
   const getTaskStatusIcon = (status: string) => {
@@ -275,7 +290,18 @@ const Dashboard: React.FC = () => {
           >
             <Card
               title="最近任务"
-              extra={<Link to="/app/works">查看全部</Link>}
+              extra={
+                <Space>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={refreshTasks}
+                    title="刷新任务"
+                  />
+                  <Link to="/app/works">查看全部</Link>
+                </Space>
+              }
               style={{ height: '100%' }}
             >
               {recentTasks.length > 0 ? (

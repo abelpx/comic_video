@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { Button, Input, Typography, Progress, message, Card, Spin, Tabs, Row, Col } from 'antd';
 import { RobotOutlined, MonitorOutlined, HistoryOutlined } from '@ant-design/icons';
-import { aiApi, taskApi } from '../services/api';
+import { aiApi } from '../services/api';
+import { useTasks } from '../store';
 import TaskProgress from '../components/TaskProgress';
 import SmartCreationAssistant from '../components/SmartCreationAssistant';
 import RealTimeMonitor from '../components/RealTimeMonitor';
+import useTaskManager from '../hooks/useTaskManager';
 
 const { Title, Paragraph } = Typography;
 const { TabPane } = Tabs;
@@ -19,6 +21,13 @@ export default function NovelToVideo() {
   const [taskSteps, setTaskSteps] = useState<any[]>([]);
   const [taskError, setTaskError] = useState<string>('');
   const timerRef = useRef<any>(null);
+
+  // 使用任务管理器
+  const { addTask } = useTasks();
+  const { } = useTaskManager({
+    autoLoad: false,
+    enablePolling: true,
+  });
 
   const handleSubmit = async () => {
     if (!novel.trim()) {
@@ -37,6 +46,21 @@ export default function NovelToVideo() {
       console.log('API Response:', response); // 调试日志
       if (response && response.task_id) {
         setTaskId(response.task_id);
+
+        // 添加任务到全局状态管理
+        addTask({
+          id: response.task_id,
+          title: `小说转视频 - ${novel.substring(0, 20)}...`,
+          type: 'video',
+          status: 'processing',
+          progress: 0,
+          steps: [],
+          result: null,
+          error: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+
         pollStatus(response.task_id);
         message.success('🚀 任务已提交，AI正在为您创作精彩视频...');
       } else {

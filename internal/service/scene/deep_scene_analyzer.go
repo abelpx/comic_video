@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
@@ -324,15 +323,12 @@ func (dsa *DeepSceneAnalyzer) parseSceneResponse(response string) ([]*entity.Sce
 	}
 	
 	// 转换为Scene对象
-	for i, rawScene := range rawScenes {
+	for _, rawScene := range rawScenes {
 		scene := &entity.Scene{
 			ID:          uuid.New(),
 			Description: getString(rawScene, "description"),
 			Location:    getString(rawScene, "location"),
 			TimeOfDay:   getString(rawScene, "time"),
-			Characters:  getStringSlice(rawScene, "characters"),
-			Actions:     getStringSlice(rawScene, "actions"),
-			Order:       i + 1,
 		}
 		scenes = append(scenes, scene)
 	}
@@ -347,14 +343,13 @@ func (dsa *DeepSceneAnalyzer) parseSceneText(text string) []*entity.Scene {
 	// 按段落分割
 	paragraphs := strings.Split(text, "\n\n")
 	
-	for i, paragraph := range paragraphs {
+	for _, paragraph := range paragraphs {
 		if len(strings.TrimSpace(paragraph)) > 50 { // 过滤太短的段落
 			scene := &entity.Scene{
 				ID:          uuid.New(),
 				Description: strings.TrimSpace(paragraph),
 				Location:    "未指定",
 				TimeOfDay:   "未指定",
-				Order:       i + 1,
 			}
 			scenes = append(scenes, scene)
 		}

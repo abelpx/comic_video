@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import { Toaster } from 'react-hot-toast';
@@ -10,7 +10,10 @@ import './styles/global.css';
 
 // 导入主题
 import { getTheme } from './styles/theme';
-import { useUI } from './store';
+import { useUI, useAuth } from './store';
+
+// 导入hooks
+import useTaskManager from './hooks/useTaskManager';
 
 // 导入布局组件
 import AppLayout from './components/Layout/AppLayout';
@@ -34,9 +37,24 @@ import QuotaPage from './pages/QuotaPage';
 import PricingPage from './pages/PricingPage';
 import ProfilePage from './pages/ProfilePage';
 import WorkflowPage from './pages/WorkflowPage';
+import TaskTestPage from './pages/TaskTestPage';
 
 // 导入路由保护组件
 import ProtectedRoute from './components/ProtectedRoute';
+
+// 任务管理组件
+const TaskManager: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+
+  // 只有在用户已登录时才启用任务管理
+  useTaskManager({
+    autoLoad: isAuthenticated,
+    enablePolling: isAuthenticated,
+    pollInterval: 3000,
+  });
+
+  return null;
+};
 
 export default function App() {
   const { theme } = useUI();
@@ -47,6 +65,8 @@ export default function App() {
       <ConfigProvider theme={antdTheme}>
         <AntApp>
           <BrowserRouter>
+            {/* 全局任务管理器 */}
+            <TaskManager />
             <AnimatePresence mode="wait">
               <Routes>
                 {/* 公开路由 */}
@@ -81,6 +101,7 @@ export default function App() {
                         <Route path="works" element={<WorksPage />} />
                         <Route path="quota" element={<QuotaPage />} />
                         <Route path="profile" element={<ProfilePage />} />
+                        <Route path="task-test" element={<TaskTestPage />} />
                       </Routes>
                     </AppLayout>
                   </ProtectedRoute>

@@ -8,3 +8,4 @@ redis-data
 minio-data
 .vscode
 bin
+temp

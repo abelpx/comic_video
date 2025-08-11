@@ -2,7 +2,6 @@ package quality
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"comic_video/internal/domain/entity"
-	"comic_video/internal/utils"
 )
 
 // AdvancedQualityController 高级质量控制器
@@ -623,7 +621,7 @@ func (aqc *AdvancedQualityController) checkCharacterDescription(character *entit
 	if character.Description != "" {
 		score += 15
 	}
-	if character.Appearance != "" {
+	if character.FacialFeatures != "" || character.HairStyle != "" || character.Clothing != "" {
 		score += 15
 	}
 	

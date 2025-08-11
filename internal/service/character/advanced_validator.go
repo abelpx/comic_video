@@ -415,9 +415,25 @@ func (acv *AdvancedCharacterValidator) generateEnhancedPrompt(character *entity.
 	}
 
 	// 外观描述
-	if character.Appearance != "" {
+	appearanceDesc := ""
+	if character.FacialFeatures != "" {
+		appearanceDesc += character.FacialFeatures
+	}
+	if character.HairStyle != "" {
+		if appearanceDesc != "" {
+			appearanceDesc += ", "
+		}
+		appearanceDesc += character.HairStyle
+	}
+	if character.Clothing != "" {
+		if appearanceDesc != "" {
+			appearanceDesc += ", "
+		}
+		appearanceDesc += character.Clothing
+	}
+	if appearanceDesc != "" {
 		prompt.WriteString(", ")
-		prompt.WriteString(character.Appearance)
+		prompt.WriteString(appearanceDesc)
 	}
 
 	// 语义特征
@@ -679,7 +695,7 @@ func (csa *CharacterSemanticAnalyzer) AnalyzeCharacterSemantics(ctx context.Cont
 8. 动机和冲突
 9. 象征意义
 
-请以结构化格式返回分析结果。`, character.Name, character.Description, character.Appearance, novelText)
+请以结构化格式返回分析结果。`, character.Name, character.Description, character.FacialFeatures, novelText)
 
 	response, err := csa.aiService.GenerateText(ctx, prompt)
 	if err != nil {
@@ -697,7 +713,7 @@ func (csa *CharacterSemanticAnalyzer) AnalyzeCharacterSemantics(ctx context.Cont
 func (csa *CharacterSemanticAnalyzer) ruleBasedSemanticAnalysis(character *entity.Character, novelText string) *CharacterSemanticProfile {
 	profile := &CharacterSemanticProfile{
 		PersonalityTraits: csa.extractPersonalityTraits(character.Description),
-		PhysicalFeatures:  csa.extractPhysicalFeatures(character.Appearance),
+		PhysicalFeatures:  csa.extractPhysicalFeatures(character.FacialFeatures + " " + character.HairStyle + " " + character.Clothing),
 		EmotionalRange:    csa.extractEmotionalRange(character.Description),
 		SpeechPatterns:    csa.extractSpeechPatterns(novelText, character.Name),
 		Relationships:     csa.extractRelationships(novelText, character.Name),
@@ -926,7 +942,8 @@ func (cqa *CharacterQualityAnalyzer) AnalyzeCharacterQuality(character *entity.C
 	metrics.RelevanceScore = cqa.evaluateRelevance(character, semantic)
 	
 	// 6. 可视化分数
-	metrics.VisualizationScore = cqa.evaluateVisualization(character.Appearance, semantic)
+	appearanceText := character.FacialFeatures + " " + character.HairStyle + " " + character.Clothing
+	metrics.VisualizationScore = cqa.evaluateVisualization(appearanceText, semantic)
 	
 	// 7. 总体质量
 	metrics.OverallQuality = (metrics.DescriptionQuality + metrics.UniquenessScore + 

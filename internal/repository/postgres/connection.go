@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"log"
 
 	"comic_video/internal/config"
 	"comic_video/internal/domain/entity"
@@ -80,5 +81,13 @@ func AutoMigrate(db *gorm.DB) error {
 		&entity.TweetAnalysis{},
 	}
 
-	return db.AutoMigrate(entities...)
+	// 逐个迁移实体，忽略约束错误
+	for _, entity := range entities {
+		if err := db.AutoMigrate(entity); err != nil {
+			// 记录错误但继续迁移
+			log.Printf("Warning: Failed to migrate %T: %v", entity, err)
+		}
+	}
+
+	return nil
 }

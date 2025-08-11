@@ -1,6 +1,8 @@
 package quality
 
 import (
+	"context"
+	"strings"
 	"time"
 
 	"comic_video/internal/domain/entity"
@@ -51,6 +53,7 @@ type QualityIssue struct {
 	Description string    `json:"description"` // 问题描述
 	Location    string    `json:"location"`    // 问题位置
 	Impact      string    `json:"impact,omitempty"`      // 影响描述
+	Solution    string    `json:"solution,omitempty"`    // 解决方案
 	DetectedAt  time.Time `json:"detected_at"`           // 检测时间
 }
 

@@ -133,12 +133,12 @@ func (cm *CacheManager) Delete(ctx context.Context, keys ...string) error {
 func (cm *CacheManager) Exists(ctx context.Context, key string) (bool, error) {
 	cacheKey := cm.buildKey(key)
 	
-	count, err := cm.redisClient.Exists(ctx, cacheKey)
+	exists, err := cm.redisClient.Exists(ctx, cacheKey)
 	if err != nil {
 		return false, WrapError(ErrCodeInternalError, "Failed to check cache existence", err)
 	}
-	
-	return count > 0, nil
+
+	return exists, nil
 }
 
 // Expire 设置缓存过期时间

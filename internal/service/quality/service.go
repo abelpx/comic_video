@@ -65,13 +65,7 @@ type AudioInfo struct {
 	Duration   float64 `json:"duration"`
 }
 
-// QualityIssue 质量问题
-type QualityIssue struct {
-	Type        string `json:"type"`        // 问题类型
-	Severity    string `json:"severity"`    // 严重程度：low/medium/high/critical
-	Description string `json:"description"` // 问题描述
-	Solution    string `json:"solution"`    // 解决方案
-}
+
 
 // OptimizationOptions 优化选项
 type OptimizationOptions struct {

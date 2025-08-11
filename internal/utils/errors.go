@@ -21,8 +21,9 @@ const (
 	ErrCodeUnauthorized    ErrorCode = 1002
 	ErrCodeForbidden       ErrorCode = 1003
 	ErrCodeNotFound        ErrorCode = 1004
-	ErrCodeConflict        ErrorCode = 1005
-	ErrCodeTooManyRequests ErrorCode = 1006
+	ErrCodeConflict           ErrorCode = 1005
+	ErrCodeTooManyRequests    ErrorCode = 1006
+	ErrCodeServiceUnavailable ErrorCode = 1007
 
 	// 用户相关错误码
 	ErrCodeUserNotFound     ErrorCode = 2001
