@@ -514,23 +514,23 @@ Please output panel JSON array:`, req.Novel)
 	updateStepStatus("image_generation", "processing", 0, "", "")
 
 	var images []string
-	var err error
+	var imageErr error
 
-	if s.useBuiltinEngine && s.workflowManager != nil {
+	if service.useBuiltinEngine && service.workflowManager != nil {
 		// 使用内置轻量级引擎
-		images, err = s.generateWithBuiltinEngine(ctx, panels, updateStepStatus, task, redisClient)
+		images, imageErr = service.generateWithBuiltinEngine(ctx, panels, updateStepStatus, task, redisClient)
 	} else {
 		// 降级到SD WebUI
-		images, err = s.generateWithSDWebUI(ctx, panels, sd, characters, sceneContext, updateStepStatus, task, redisClient)
+		images, imageErr = service.generateWithSDWebUI(ctx, panels, sd, characters, sceneContext, updateStepStatus, task, redisClient)
 	}
 
-	if err != nil {
-		updateStepStatus("image_generation", "failed", 0, "", err.Error())
+	if imageErr != nil {
+		updateStepStatus("image_generation", "failed", 0, "", imageErr.Error())
 		task.Status = entity.TaskStatusFailed
-		task.Error = "图片生成失败: " + err.Error()
+		task.Error = "图片生成失败: " + imageErr.Error()
 		task.UpdatedAt = time.Now()
 		_ = redisClient.SetTaskStatus(ctx, task, 24*time.Hour)
-		return err
+		return imageErr
 	}
 
 	// 图片生成完成

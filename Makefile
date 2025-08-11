@@ -1,7 +1,8 @@
 # Comic Video Makefile
 # 简化开发和部署流程
 
-.PHONY: help build test clean dev prod docker lint format deps migrate swagger
+.PHONY: help build test clean dev run lint format deps migrate swagger
+.PHONY: install setup start stop restart status logs clean-logs
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -27,6 +28,17 @@ DB_PORT := 5432
 DB_NAME := comic_video
 DB_USER := comic_video_user
 DB_PASSWORD := comic_video_password
+
+# 应用配置
+APP_NAME := comic-video
+APP_PORT := 8080
+APP_HOST := localhost
+
+# 本地服务配置
+TTS_LOCAL_PATH := F:/pycharm/project/Spark-TTS
+TTS_PORT := 8000
+POSTGRES_PORT := 5432
+REDIS_PORT := 6379
 
 ## help: 显示帮助信息
 help:
@@ -79,17 +91,144 @@ clean:
 	@go clean -cache -testcache -modcache
 	@echo "清理完成"
 
-## dev: 启动开发环境
-dev:
-	@echo "启动开发环境..."
-	@docker-compose -f docker-compose.dev.yml up -d
-	@echo "开发环境已启动"
+## setup: 初始化开发环境
+setup:
+	@echo "🛠️ 初始化开发环境..."
+	@echo "📋 检查依赖..."
+	@command -v go >/dev/null 2>&1 || { echo "❌ Go 未安装"; exit 1; }
+	@command -v docker >/dev/null 2>&1 || { echo "❌ Docker 未安装"; exit 1; }
+	@command -v docker-compose >/dev/null 2>&1 || { echo "❌ Docker Compose 未安装"; exit 1; }
+	@echo "✅ 依赖检查完成"
+	@echo "📝 设置环境配置..."
+	@if [ ! -f .env ]; then \
+		cp .env.dev .env; \
+		echo "✅ 已创建 .env 文件"; \
+	else \
+		echo "ℹ️ .env 文件已存在"; \
+	fi
+	@echo "📁 创建必要目录..."
+	@mkdir -p logs/{app,postgres,redis,minio}
+	@mkdir -p output/{videos,images,audio}
+	@mkdir -p temp
+	@mkdir -p config
+	@echo "📦 安装Go依赖..."
+	@go mod tidy
+	@echo "🎉 开发环境初始化完成!"
 
-## dev-stop: 停止开发环境
-dev-stop:
-	@echo "停止开发环境..."
-	@docker-compose -f docker-compose.dev.yml down
-	@echo "开发环境已停止"
+## install: 安装依赖
+install:
+	@echo "📦 安装项目依赖..."
+	@go mod download
+	@go mod tidy
+	@echo "✅ 依赖安装完成"
+
+## start-services: 启动基础设施服务
+start-services:
+	@echo "🚀 启动基础设施服务..."
+	@docker-compose up -d
+	@echo "⏳ 等待服务启动..."
+	@sleep 10
+	@make status
+	@echo "🎉 基础设施服务已启动!"
+	@echo ""
+	@echo "📊 服务地址:"
+	@echo "  🗄️ PostgreSQL:   localhost:5432"
+	@echo "  🔴 Redis:        localhost:6379"
+	@echo "  📁 MinIO API:    http://localhost:9000"
+	@echo "  🌐 MinIO控制台:   http://localhost:9001"
+	@echo ""
+	@echo "📝 查看日志: make logs"
+	@echo "🛑 停止服务: make stop-services"
+
+## dev: 启动开发服务器
+dev: start-services
+	@echo "🚀 启动开发服务器..."
+	@echo "📋 检查基础设施服务..."
+	@make status
+	@echo "🏃 启动Go应用..."
+	@go run cmd/server/main.go
+
+## run: 运行应用
+run:
+	@echo "🏃 运行应用..."
+	@go run cmd/server/main.go
+
+## dev-minimal: 启动最小开发环境(仅核心服务)
+dev-minimal: dev-setup
+	@echo "🚀 启动最小开发环境..."
+	@docker-compose -f docker-compose.dev.yml up -d postgres-dev redis-dev minio-dev vidcraft-api vidcraft-web
+	@echo "✅ 最小开发环境已启动!"
+	@echo ""
+	@echo "📊 服务地址:"
+	@echo "  🌐 API服务:      http://localhost:8080"
+	@echo "  🎨 前端界面:     http://localhost:3000"
+	@echo "  🗄️ MinIO控制台:  http://localhost:9001"
+
+## dev-ai: 启动AI服务环境
+dev-ai:
+	@echo "🤖 启动AI服务环境..."
+	@echo "📋 检查TTS目录..."
+	@if [ ! -d "$(TTS_LOCAL_PATH)" ]; then \
+		echo "❌ TTS目录不存在: $(TTS_LOCAL_PATH)"; \
+		echo "请确保Spark-TTS项目已克隆到指定路径"; \
+		exit 1; \
+	fi
+	@docker-compose -f docker-compose.dev.yml --profile ai-services up -d tts ollama-dev
+	@echo "⏳ 等待AI服务启动..."
+	@sleep 15
+	@make ai-services-check
+	@echo "✅ AI服务环境已启动!"
+
+## stop-services: 停止基础设施服务
+stop-services:
+	@echo "🛑 停止基础设施服务..."
+	@docker-compose down
+	@echo "✅ 基础设施服务已停止"
+
+## restart-services: 重启基础设施服务
+restart-services:
+	@echo "🔄 重启基础设施服务..."
+	@docker-compose restart
+	@echo "✅ 基础设施服务已重启"
+
+## logs: 查看服务日志
+logs:
+	@echo "📋 查看服务日志..."
+	@docker-compose logs -f
+
+## status: 检查服务状态
+status:
+	@echo "📊 检查服务状态..."
+	@echo ""
+	@echo "🐳 Docker容器状态:"
+	@docker-compose ps
+	@echo ""
+	@echo "🔗 服务连接测试:"
+	@echo -n "  PostgreSQL: "
+	@if pg_isready -h localhost -p 5432 -U comic_video > /dev/null 2>&1; then \
+		echo "✅ 连接正常"; \
+	else \
+		echo "❌ 连接失败"; \
+	fi
+	@echo -n "  Redis: "
+	@if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then \
+		echo "✅ 连接正常"; \
+	else \
+		echo "❌ 连接失败"; \
+	fi
+	@echo -n "  MinIO: "
+	@if curl -f -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then \
+		echo "✅ 连接正常"; \
+	else \
+		echo "❌ 连接失败"; \
+	fi
+
+## clean-services: 清理服务数据
+clean-services:
+	@echo "🧹 清理服务数据..."
+	@docker-compose down -v --remove-orphans
+	@docker system prune -f
+	@echo "✅ 服务数据清理完成"
 
 ## prod: 启动生产环境
 prod:
@@ -222,11 +361,27 @@ db-restore:
 	psql -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d $(DB_NAME) < $$file
 	@echo "数据库恢复完成"
 
+
+
+
+
 ## health: 检查服务健康状态
 health:
-	@echo "检查服务健康状态..."
-	@curl -f http://localhost:8080/health || echo "API服务不可用"
-	@curl -f http://localhost:3000 || echo "前端服务不可用"
+	@echo "🏥 检查服务健康状态..."
+	@echo ""
+	@echo "🌐 核心服务:"
+	@if curl -f -s http://localhost:8080/health > /dev/null 2>&1; then \
+		echo "  ✅ API服务运行正常 (http://localhost:8080)"; \
+	else \
+		echo "  ❌ API服务不可用 (http://localhost:8080)"; \
+	fi
+	@if curl -f -s http://localhost:3000 > /dev/null 2>&1; then \
+		echo "  ✅ 前端服务运行正常 (http://localhost:3000)"; \
+	else \
+		echo "  ❌ 前端服务不可用 (http://localhost:3000)"; \
+	fi
+	@echo ""
+	@make ai-services-check
 
 ## version: 显示版本信息
 version:

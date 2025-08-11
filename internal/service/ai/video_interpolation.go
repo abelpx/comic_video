@@ -242,7 +242,7 @@ func (vi *VideoInterpolator) OptimizeForAnimation(
 ) (*InterpolationResult, error) {
 	
 	quality := "balanced"
-	smoothFactor := 0.6
+	_ = 0.6 // smoothFactor 暂时不使用
 	
 	switch animationType {
 	case "smooth":
@@ -314,28 +314,28 @@ func (vi *VideoInterpolator) EstimateResourceUsage(frameCount int, targetFPS int
 			GPUMemory:   baseMemory * 0.7,
 			ProcessTime: baseTime * 1,
 			CPUUsage:    30.0,
-			OutputSize:  int64(frameCount * targetFPS * 0.5), // MB
+			OutputSize:  int64(float64(frameCount * targetFPS) * 0.5), // MB
 		}
 	case "balanced":
 		return ResourceUsageEstimate{
 			GPUMemory:   baseMemory * 1.0,
 			ProcessTime: baseTime * 2,
 			CPUUsage:    50.0,
-			OutputSize:  int64(frameCount * targetFPS * 0.8),
+			OutputSize:  int64(float64(frameCount * targetFPS) * 0.8),
 		}
 	case "high":
 		return ResourceUsageEstimate{
 			GPUMemory:   baseMemory * 1.5,
 			ProcessTime: baseTime * 4,
 			CPUUsage:    70.0,
-			OutputSize:  int64(frameCount * targetFPS * 1.2),
+			OutputSize:  int64(float64(frameCount * targetFPS) * 1.2),
 		}
 	default:
 		return ResourceUsageEstimate{
 			GPUMemory:   baseMemory,
 			ProcessTime: baseTime * 2,
 			CPUUsage:    50.0,
-			OutputSize:  int64(frameCount * targetFPS * 0.8),
+			OutputSize:  int64(float64(frameCount * targetFPS) * 0.8),
 		}
 	}
 }

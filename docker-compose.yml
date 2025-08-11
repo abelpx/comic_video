@@ -1,203 +1,125 @@
 version: '3.8'
 
+# =============================================================================
+# 🎬 Comic Video 基础设施服务
+# 仅包含数据库、缓存和文件存储服务，应用本身在本地运行
+# =============================================================================
+
 services:
-  # PostgreSQL 数据库
+  # =============================================================================
+  # 🗄️ PostgreSQL 数据库
+  # =============================================================================
   postgres:
     image: postgres:15-alpine
-    container_name: vidcraft_postgres
+    container_name: comic_video_postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: vidcraft_password
-      POSTGRES_DB: vidcraft_studio
-      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-comic_video}
+      POSTGRES_USER: ${POSTGRES_USER:-comic_video}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-comic_video_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - comic_video_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U root -d vidcraft_studio"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-comic_video} -d ${POSTGRES_DB:-comic_video}"]
+      interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - vidcraft_network
+      start_period: 30s
 
-  # Redis 缓存
+  # =============================================================================
+  # 🔴 Redis 缓存
+  # =============================================================================
   redis:
     image: redis:7-alpine
-    container_name: vidcraft_redis
+    container_name: comic_video_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-comic_video_redis}
     volumes:
-      - ./redis-data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf
-    command: redis-server /usr/local/etc/redis/redis.conf
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
-      - vidcraft_network
+      - comic_video_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
 
-  # MinIO 对象存储
+  # =============================================================================
+  # 📁 MinIO 对象存储
+  # =============================================================================
   minio:
     image: minio/minio:latest
-    container_name: vidcraft_minio
+    container_name: comic_video_minio
     restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:9000"  # API端口
+      - "9001:9001"  # 控制台端口
     environment:
-      MINIO_ROOT_USER: "minioadmin"
-      MINIO_ROOT_PASSWORD: "minioadmin123"
-      MINIO_SERVER_URL: "http://localhost:9000"
-      MINIO_BROWSER: "on"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-comic_video}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-comic_video_minio_password}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
     volumes:
-      - ./minio-data:/data
+      - minio_data:/data
+    networks:
+      - comic_video_network
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
-    networks:
-      - vidcraft_network
+      start_period: 30s
 
-  # TTS 语音合成服务
-  tts:
-    image: soar97/triton-spark-tts:25.02
-    container_name: vidcraft_tts
-    shm_size: '1gb'
-    ports:
-      - "8000:8000"
-      - "8001:8001"
-      - "8002:8002"
-    environment:
-      - PYTHONIOENCODING=utf-8
-      - MODEL_ID=${MODEL_ID:-spark-tts}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']
-              capabilities: [gpu]
-    command: >
-      /bin/bash -c "rm -rf Spark-TTS && git clone https://github.com/SparkAudio/Spark-TTS.git && cd Spark-TTS/runtime/triton_trtllm && bash run.sh 0 3"
-    restart: unless-stopped
-    networks:
-      - vidcraft_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    profiles:
-      - ai-services
-
-  # VidCraft API 服务器
-  vidcraft-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: vidcraft_api
-    ports:
-      - "8080:8080"
-    environment:
-      # 服务器配置
-      - SERVER_PORT=8080
-      - SERVER_MODE=release
-
-      # 数据库配置
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=vidcraft_password
-      - DB_NAME=vidcraft_studio
-      - DB_SSLMODE=disable
-
-      # Redis配置
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_DB=0
-
-      # MinIO配置
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin123
-      - MINIO_BUCKET_NAME=vidcraft
-      - MINIO_USE_SSL=false
-
-      # JWT配置
-      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
-      - JWT_EXPIRE=86400
-
-      # AI服务配置
-      - OLLAMA_ENDPOINT=http://host.docker.internal:11434
-      - OLLAMA_MODEL=deepseek-r1:14b
-      - OLLAMA_API_KEY=
-      - SD_ENDPOINT=http://host.docker.internal:7860
-      - SD_TIMEOUT=300s
-      - SD_MAX_RETRIES=3
-      - WHISPER_ENDPOINT=http://host.docker.internal:9000
-      - TTS_ENDPOINT=http://tts:8000
-      - VIDEO_GEN_ENDPOINT=http://host.docker.internal:8000
-      - MUSIC_GEN_ENDPOINT=http://host.docker.internal:8001
-
-      # 工作流配置
-      - MAX_CONCURRENT_TASKS=5
-      - TASK_TIMEOUT=1800s
-    volumes:
-      - ./logs:/root/logs
-      - ./output:/root/output
-      - ./uploads:/root/uploads
-      - ./temp:/root/temp
+  # =============================================================================
+  # 🔧 MinIO 初始化（创建默认存储桶）
+  # =============================================================================
+  minio-init:
+    image: minio/mc:latest
+    container_name: comic_video_minio_init
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       minio:
         condition: service_healthy
-      tts:
-        condition: service_healthy
-    restart: unless-stopped
     networks:
-      - vidcraft_network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - comic_video_network
+    entrypoint: >
+      /bin/sh -c "
+      echo '🔧 配置MinIO客户端...' &&
+      /usr/bin/mc alias set minio http://minio:9000 ${MINIO_ROOT_USER:-comic_video} ${MINIO_ROOT_PASSWORD:-comic_video_minio_password} &&
+      echo '📁 创建存储桶...' &&
+      /usr/bin/mc mb minio/comic-video-uploads --ignore-existing &&
+      /usr/bin/mc mb minio/comic-video-outputs --ignore-existing &&
+      /usr/bin/mc mb minio/comic-video-temp --ignore-existing &&
+      echo '🔐 设置存储桶策略...' &&
+      /usr/bin/mc anonymous set public minio/comic-video-uploads &&
+      /usr/bin/mc anonymous set public minio/comic-video-outputs &&
+      echo '✅ MinIO初始化完成!'
+      "
 
-  # VidCraft 前端应用
-  vidcraft-web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    container_name: vidcraft_web
-    ports:
-      - "3000:3000"
-    depends_on:
-      vidcraft-api:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - vidcraft_network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+# =============================================================================
+# 📦 数据卷
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
 
+# =============================================================================
+# 🌐 网络
+# =============================================================================
 networks:
-  vidcraft_network:
+  comic_video_network:
     driver: bridge
-    name: vidcraft_network
+    name: comic_video_network

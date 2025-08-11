@@ -77,11 +77,7 @@ func IsEmpty(value interface{}) bool {
 	}
 }
 
-// ValidateEmail 验证邮箱格式
-func ValidateEmail(email string) bool {
-	validate := validator.New()
-	return validate.Var(email, "email") == nil
-}
+
 
 // ValidatePassword 验证密码强度
 func ValidatePassword(password string) (bool, string) {
